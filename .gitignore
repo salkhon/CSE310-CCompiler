@@ -33,3 +33,7 @@
 
 .vscode/
 *.pdf
+*.pptx
+input.txt
+output.txt
+test/
