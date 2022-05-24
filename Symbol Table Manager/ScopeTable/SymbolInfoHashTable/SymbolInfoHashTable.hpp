@@ -6,8 +6,13 @@
 
 using namespace std;
 
+namespace printing_info {
+    string _scope_table_id;
+    int _chain_index;
+}
+
 /**
- * @brief Implementation for the token hash table of a Scope Table. 
+ * @brief Implementation for the token hash table of a Scope Table.
  */
 class SymbolInfoHashTable {
     const int total_buckets;
@@ -15,7 +20,7 @@ class SymbolInfoHashTable {
 
 public:
     SymbolInfoHashTable(const int total_buckets);
-    
+
     ~SymbolInfoHashTable();
 
     int get_num_buckets();

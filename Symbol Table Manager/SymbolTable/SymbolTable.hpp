@@ -1,3 +1,4 @@
+#pragma once
 #include <vector>
 #include "../ScopeTable/ScopeTable.hpp"
 
@@ -12,9 +13,10 @@ using namespace std;
 class SymbolTable {
     ScopeTable* current_scope_table;
     vector<ScopeTable*> scope_tables;
+    const int total_buckets;
 
 public:
-    SymbolTable();
+    SymbolTable(int);
 
     ~SymbolTable();
 

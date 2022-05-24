@@ -22,12 +22,16 @@ SymbolInfoHashTable::~SymbolInfoHashTable() {
 
 SymbolInfo* find_syminfo_name_in_chain(const string& symbol_info_name, SymbolInfo* const chain_root) {
     SymbolInfo* current = chain_root;
+    int idx = 0;
     while (current != nullptr) {
         if (current->get_name_str() == symbol_info_name) {
             break;
         }
         current = current->next_syminfo_ptr;
+        idx++;
     }
+    printing_info::_chain_index = idx;
+
     return current;
 }
 
@@ -47,16 +51,28 @@ bool SymbolInfoHashTable::insert(const string& symbol_info_name, const string& s
         SymbolInfo* insertion = new SymbolInfo(symbol_info_name, symbol_info_type, old_chain_root);
         this->table[bucket] = insertion;
 
+        cout << "Inserted in ScopeTable# " << printing_info::_scope_table_id << " at position "
+            << bucket << ", " << printing_info::_chain_index << endl;
+
         return true;
     } else {
-        collision->set_type_str(symbol_info_type);
+        cout << "<" << collision->get_name_str() << ", " << collision->get_type_str()
+            << "> already exists in the current ScopeTable\n";
+
         return false;
     }
 }
 
 SymbolInfo* SymbolInfoHashTable::lookup(const string& symbol_info_name) {
     int bucket = this->hash(symbol_info_name);
-    return find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
+    SymbolInfo* target = find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
+
+    if (target != nullptr) {
+        cout << "Found in ScopeTable# " << printing_info::_scope_table_id << " at position "
+            << bucket << ", " << printing_info::_chain_index << endl;
+    }
+
+    return target;
 }
 
 bool SymbolInfoHashTable::delete_symbolinfo(const string& symbol_info_name) {
@@ -71,16 +87,20 @@ bool SymbolInfoHashTable::delete_symbolinfo(const string& symbol_info_name) {
 
         delete current;
         is_successful_delete = true;
+
+        printing_info::_chain_index = 0;
     } else {
         // keep track of prev to connect chain after removing target.
         SymbolInfo* prev = nullptr;
 
+        int idx = 0;
         while (current != nullptr) {
             if (current->get_name_str() == symbol_info_name) {
                 break;
             }
             prev = current;
             current = current->next_syminfo_ptr;
+            idx++;
         }
 
         if (current != nullptr) {
@@ -88,7 +108,14 @@ bool SymbolInfoHashTable::delete_symbolinfo(const string& symbol_info_name) {
 
             delete current;
             is_successful_delete = true;
+            printing_info::_chain_index = idx;
         }
+    }
+
+    if (is_successful_delete) {
+        cout << "Deleted Entry " << bucket << ", " << printing_info::_chain_index << " from current ScopeTable\n";
+    } else {
+        cout << "Not found\n";
     }
 
     return is_successful_delete;
@@ -105,10 +132,8 @@ int SymbolInfoHashTable::hash(const string& symbol_info_name) {
 void _print_chain(SymbolInfo* const symbol_info_ptr) {
     SymbolInfo* current = symbol_info_ptr;
     while (current != nullptr) {
-        cout << "<" << current->get_name_str() << ", " << current->get_type_str() << ">";
-        if (current->next_syminfo_ptr != nullptr) {
-            cout << " -> ";
-        }
+        cout << "<" << current->get_name_str() << ", " << current->get_type_str() << ">  ";
+        
         current = current->next_syminfo_ptr;
     }
 }
