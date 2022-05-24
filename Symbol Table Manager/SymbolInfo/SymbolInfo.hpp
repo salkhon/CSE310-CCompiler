@@ -1,21 +1,23 @@
 #pragma once
-#include <memory>
 #include <string>
 
 using namespace std;
 
-class SymbolInfo;
-
-using SymbolInfoPtr = shared_ptr<SymbolInfo>;
-
+/**
+ * @brief Token class. Contains the name and type of the token. Also contains the pointer to the 
+ * next SymbolInfo in the chain for the separately chained hashtable of the Scope table.
+ */
 class SymbolInfo {
     string name;
     string type;
 
 public:
-    SymbolInfoPtr next;
+    // Not allocated or destroyed inside SymbolInfo class. 
+    SymbolInfo* next_syminfo_ptr; 
 
-    SymbolInfo(const string& name, const string& type) : name(name), type(type), next(nullptr) {}
+    SymbolInfo(const string& name, const string& type, SymbolInfo* next_syminfo_ptr);
+
+    ~SymbolInfo();
 
     string get_name_str();
 

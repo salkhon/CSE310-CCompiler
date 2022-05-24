@@ -6,27 +6,28 @@
 
 using namespace std;
 
-using SymbolInfoPtr = shared_ptr<SymbolInfo>;
-
+/**
+ * @brief Implementation for the token hash table of a Scope Table. 
+ */
 class SymbolInfoHashTable {
     const int total_buckets;
-    vector<SymbolInfoPtr> table;
+    vector<SymbolInfo*> table;
 
 public:
-    SymbolInfoHashTable(const int total_buckets) : total_buckets(total_buckets), table(total_buckets, nullptr) {}
-
+    SymbolInfoHashTable(const int total_buckets);
+    
     ~SymbolInfoHashTable();
 
     int get_num_buckets();
 
-    bool insert(const SymbolInfoPtr symbol_info_ptr);
+    bool insert(const string& symbol_info_name, const string& symbol_info_type);
 
-    SymbolInfoPtr lookup(const string symbol_name);
+    SymbolInfo* lookup(const string& symbol_info_name);
 
-    bool delete_symbolinfo(const string symbol_name);
+    bool delete_symbolinfo(const string& symbol_info_name);
 
     void print();
 
 private:
-    int hash(const string& symbol_name);
+    int hash(const string& symbol_info_name);
 };
