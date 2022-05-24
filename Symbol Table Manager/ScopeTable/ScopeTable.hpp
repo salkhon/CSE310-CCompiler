@@ -13,14 +13,23 @@ using namespace std;
  * Can perform insertion, lookup, deletion for the tokens in the hashtable.
  */
 class ScopeTable {
-    SymbolInfoHashTable hashtable;
+    SymbolInfoHashTable* hashtable;
+    int current_id;
+    string id;
     ScopeTable* parent_scope_ptr;
-    const int current_id;
-    const string id;
 
 public:
-    ScopeTable(int total_buckets)
-        : hashtable(total_buckets), parent_scope_ptr(nullptr), id(""), current_id(-1) {}
+    ScopeTable(int total_buckets, ScopeTable*);
+
+    ~ScopeTable();
+
+    ScopeTable* get_parent_scope();
+
+    void set_parent_scope_ptr_with_id_currentid(ScopeTable*);
+
+    string get_id();
+
+    int get_current_id();
 
     bool insert(const string& symbol_info_name, const string& symbol_info_type);
 
