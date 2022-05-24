@@ -58,11 +58,20 @@ void ScopeTable::set_parent_scope_ptr_with_id_currentid(ScopeTable* parent_scope
 
     if (this->parent_scope_ptr != nullptr) {
         this->current_id = this->parent_scope_ptr->current_id + 1;
-        // TODO construct id from number of deleted child scope tables from the parent scope. 
+        this->id = this->parent_scope_ptr->get_id() + "." +
+            to_string(this->parent_scope_ptr->get_num_deleted_children() + 1);
     } else {
         this->current_id = 1;
         this->id = "";
     }
+}
+
+int ScopeTable::get_num_deleted_children() {
+    return this->num_deleted_children;
+}
+
+void ScopeTable::set_num_deleted_children(int num_deleted_childred) {
+    this->num_deleted_children = num_deleted_childred;
 }
 
 ScopeTable* ScopeTable::get_parent_scope() {

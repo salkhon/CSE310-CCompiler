@@ -17,6 +17,7 @@ class ScopeTable {
     int current_id;
     string id;
     ScopeTable* parent_scope_ptr;
+    int num_deleted_children;
 
 public:
     ScopeTable(int total_buckets, ScopeTable*);
@@ -26,6 +27,10 @@ public:
     ScopeTable* get_parent_scope();
 
     void set_parent_scope_ptr_with_id_currentid(ScopeTable*);
+
+    int get_num_deleted_children();
+
+    void set_num_deleted_children(int);
 
     string get_id();
 
