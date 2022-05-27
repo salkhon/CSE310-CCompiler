@@ -1,5 +1,7 @@
 #include "SymbolInfo.hpp"
 
+using namespace std;
+
 SymbolInfo::SymbolInfo(const string& name, const string& type, SymbolInfo* next_syminfo_ptr)
     : name(name), type(type), next_syminfo_ptr(next_syminfo_ptr) {}
 
@@ -16,3 +18,8 @@ string SymbolInfo::get_type_str() {
 void SymbolInfo::set_type_str(const string& type) {
     this->type = type;
 }
+
+ostream& operator<<(ostream& ostrm, SymbolInfo& syminfo) {
+    ostrm << "<" << syminfo.get_name_str() << ", " << syminfo.get_type_str() << ">";
+    return ostrm;
+};

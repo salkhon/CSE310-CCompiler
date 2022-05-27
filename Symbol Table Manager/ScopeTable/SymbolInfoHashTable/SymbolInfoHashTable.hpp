@@ -3,13 +3,13 @@
 #include <vector>
 #include <iostream>
 #include "../../SymbolInfo/SymbolInfo.hpp"
+#include "../ScopeTable.hpp"
 
 using namespace std;
 
-namespace printing_info {
-    string _scope_table_id;
-    int _chain_index;
-}
+// when ScopeTable is imported in main, this file is recursively imported BEFORE ScopeTable. 
+// Which would mean ScopeTable* is used before declaration of class ScopeTable. 
+class ScopeTable; 
 
 /**
  * @brief Implementation for the token hash table of a Scope Table.
@@ -17,8 +17,9 @@ namespace printing_info {
 class SymbolInfoHashTable {
     const int total_buckets;
     vector<SymbolInfo*> table;
-
 public:
+    ScopeTable* enclosing_scope_table_ptr;
+
     SymbolInfoHashTable(const int total_buckets);
 
     ~SymbolInfoHashTable();

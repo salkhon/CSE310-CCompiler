@@ -22,7 +22,7 @@ int main() {
         string input;
 
         ifs >> input;
-        cout << input << endl;
+        // cout << input << endl;
 
         const int total_buckets = stoi(input);
 
@@ -32,26 +32,26 @@ int main() {
 
         while (ifs.good()) {
             ifs >> input;
-            cout << input << " ";
+            cout << "\n";
 
             if (input == "I") {
                 ifs >> symbol_name >> symbol_type;
-                cout << symbol_name << " " << symbol_type << endl;
+                // cout << symbol_name << " " << symbol_type << endl;
 
                 symbol_table.insert(symbol_name, symbol_type);
             } else if (input == "L") {
                 ifs >> symbol_name;
-                cout << symbol_name << endl;
+                // cout << symbol_name << endl;
 
                 symbol_table.lookup(symbol_name);
             } else if (input == "D") {
                 ifs >> symbol_name;
-                cout << symbol_name << endl;
+                // cout << symbol_name << endl;
 
-                symbol_table.lookup(symbol_name);
+                symbol_table.remove(symbol_name);
             } else if (input == "P") {
                 ifs >> input;
-                cout << input << endl;
+                // cout << input << endl;
 
                 if (input == "A") {
                     symbol_table.print_all_scope_tables();
@@ -59,14 +59,16 @@ int main() {
                     symbol_table.print_current_scope_table();
                 }
             } else if (input == "S") {
-                cout << endl;
+                // cout << endl;
 
                 symbol_table.enter_scope();
             } else if (input == "E") {
-                cout << endl;
+                // cout << endl;
 
                 symbol_table.exit_scope();
             }
+
+            cout << "\n";
         }
     }
 

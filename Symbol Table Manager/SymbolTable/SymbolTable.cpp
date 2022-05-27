@@ -4,21 +4,19 @@ using namespace std;
 
 SymbolTable::SymbolTable(int total_buckets)
     : scope_tables(),
+    current_scope_table(nullptr),
     total_buckets(total_buckets) {
-    this->scope_tables.push_back(new ScopeTable(total_buckets, nullptr));
-    this->current_scope_table = this->scope_tables[0];
+    this->enter_scope();
 }
 
 SymbolTable::~SymbolTable() {
     ScopeTable* current = this->current_scope_table;
 
-    while (current != nullptr) {
-        ScopeTable* parent = current->get_parent_scope();
-
-        delete current;
-
-        current = parent;
+    while (this->scope_tables.size() != 0) {
+        this->exit_scope();
     }
+
+    cout << "Destroying symbol table\n";
 }
 
 /**
@@ -36,6 +34,7 @@ void SymbolTable::enter_scope() {
  */
 void SymbolTable::exit_scope() {
     if (this->current_scope_table == nullptr) {
+        cout << "No current scope\n";
         return;
     }
 
@@ -44,9 +43,12 @@ void SymbolTable::exit_scope() {
     this->scope_tables.pop_back();
 
     delete old_current_scope_table;
-    this->current_scope_table->set_num_deleted_children(
-        this->current_scope_table->get_num_deleted_children() + 1
-    );
+
+    if (this->current_scope_table != nullptr) {
+        this->current_scope_table->set_num_deleted_children(
+            this->current_scope_table->get_num_deleted_children() + 1
+        );
+    }
 }
 
 /**
@@ -59,6 +61,7 @@ void SymbolTable::exit_scope() {
  */
 bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_info_type) {
     if (this->current_scope_table == nullptr) {
+        cout << "No current scope\n";
         return false;
     }
 
@@ -74,6 +77,7 @@ bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_in
  */
 bool SymbolTable::remove(const string& symbol_info_name) {
     if (this->current_scope_table == nullptr) {
+        cout << "No current scope\n";
         return false;
     }
 
@@ -89,19 +93,19 @@ bool SymbolTable::remove(const string& symbol_info_name) {
  */
 SymbolInfo* SymbolTable::lookup(const string& symbol_info_name) {
     if (current_scope_table == nullptr) {
+        cout << "No current scope\n";
         return nullptr;
     }
 
     SymbolInfo* target = nullptr;
-    ScopeTable* current = this->current_scope_table;
+    ScopeTable* current_scope = this->current_scope_table;
 
-    while (current != nullptr) {
-        printing_info::_scope_table_id = current->get_id();
-        target = current->lookup(symbol_info_name);
+    while (current_scope != nullptr) {
+        target = current_scope->lookup(symbol_info_name);
         if (target != nullptr) {
             break;
         }
-        current = current->get_parent_scope();
+        current_scope = current_scope->get_parent_scope();
     }
 
     if (target == nullptr) {
@@ -116,12 +120,11 @@ void SymbolTable::print_current_scope_table() {
 }
 
 void SymbolTable::print_all_scope_tables() {
-    cout << "==========================Symbol Table==================================\n";
+    // cout << "==========================Symbol Table==================================\n";
     for (auto rev_iter = this->scope_tables.rbegin(); rev_iter != this->scope_tables.rend(); rev_iter++) {
         ScopeTable* scope_table = *rev_iter;
 
-        cout << "\nScopetable: " << scope_table->get_id() << endl;
         scope_table->print();
     }
-    cout << "==========================------X-----==================================\n";
+    // cout << "==========================------X-----==================================\n";
 }

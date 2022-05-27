@@ -2,6 +2,10 @@
 
 using namespace std;
 
+namespace printing_info {
+    int _chain_index = -1;
+}
+
 SymbolInfoHashTable::SymbolInfoHashTable(const int total_buckets)
     : total_buckets(total_buckets), table(total_buckets, nullptr) {}
 
@@ -20,7 +24,7 @@ SymbolInfoHashTable::~SymbolInfoHashTable() {
     }
 }
 
-SymbolInfo* find_syminfo_name_in_chain(const string& symbol_info_name, SymbolInfo* const chain_root) {
+SymbolInfo* _find_syminfo_name_in_chain(const string& symbol_info_name, SymbolInfo* const chain_root) {
     SymbolInfo* current = chain_root;
     int idx = 0;
     while (current != nullptr) {
@@ -39,25 +43,39 @@ int SymbolInfoHashTable::get_num_buckets() {
     return this->total_buckets;
 }
 
+void _insert_at_the_end_of_chain(SymbolInfo* const insertion, vector<SymbolInfo*>& table, int bucket) {
+    SymbolInfo* current_sym_info = table[bucket];
+
+    int idx = 0;
+    if (current_sym_info == nullptr) {
+        table[bucket] = insertion;
+    } else {
+        idx++;
+        while (current_sym_info->next_syminfo_ptr != nullptr) {
+            idx++;
+            current_sym_info = current_sym_info->next_syminfo_ptr;
+        }
+        current_sym_info->next_syminfo_ptr = insertion;
+    }
+    printing_info::_chain_index = idx;
+}
+
 bool SymbolInfoHashTable::insert(const string& symbol_info_name, const string& symbol_info_type) {
     int bucket = this->hash(symbol_info_name);
 
-    SymbolInfo* old_chain_root = this->table[bucket];
-
-    SymbolInfo* collision = find_syminfo_name_in_chain(symbol_info_name, old_chain_root);
+    SymbolInfo* collision = _find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
 
     if (collision == nullptr) {
         // no collision
-        SymbolInfo* insertion = new SymbolInfo(symbol_info_name, symbol_info_type, old_chain_root);
-        this->table[bucket] = insertion;
+        SymbolInfo* insertion = new SymbolInfo(symbol_info_name, symbol_info_type, nullptr);
+        _insert_at_the_end_of_chain(insertion, this->table, bucket);
 
-        cout << "Inserted in ScopeTable# " << printing_info::_scope_table_id << " at position "
+        cout << "Inserted in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
             << bucket << ", " << printing_info::_chain_index << endl;
 
         return true;
     } else {
-        cout << "<" << collision->get_name_str() << ", " << collision->get_type_str()
-            << "> already exists in the current ScopeTable\n";
+        cout << " " << *collision << " already exists in the current ScopeTable\n";
 
         return false;
     }
@@ -65,10 +83,10 @@ bool SymbolInfoHashTable::insert(const string& symbol_info_name, const string& s
 
 SymbolInfo* SymbolInfoHashTable::lookup(const string& symbol_info_name) {
     int bucket = this->hash(symbol_info_name);
-    SymbolInfo* target = find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
+    SymbolInfo* target = _find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
 
     if (target != nullptr) {
-        cout << "Found in ScopeTable# " << printing_info::_scope_table_id << " at position "
+        cout << "Found in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
             << bucket << ", " << printing_info::_chain_index << endl;
     }
 
@@ -113,9 +131,11 @@ bool SymbolInfoHashTable::delete_symbolinfo(const string& symbol_info_name) {
     }
 
     if (is_successful_delete) {
-        cout << "Deleted Entry " << bucket << ", " << printing_info::_chain_index << " from current ScopeTable\n";
+        cout << "Found in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position " << printing_info::_chain_index << endl;
+        cout << "Deleted Entry at " << bucket << ", " << printing_info::_chain_index << " in the current ScopeTable\n";
     } else {
         cout << "Not found\n";
+        cout << symbol_info_name << " is not found\n";
     }
 
     return is_successful_delete;
@@ -132,8 +152,8 @@ int SymbolInfoHashTable::hash(const string& symbol_info_name) {
 void _print_chain(SymbolInfo* const symbol_info_ptr) {
     SymbolInfo* current = symbol_info_ptr;
     while (current != nullptr) {
-        cout << "<" << current->get_name_str() << ", " << current->get_type_str() << ">  ";
-        
+        cout << *current << " ";
+
         current = current->next_syminfo_ptr;
     }
 }

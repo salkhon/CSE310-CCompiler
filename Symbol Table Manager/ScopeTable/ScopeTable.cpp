@@ -5,6 +5,7 @@ using namespace std;
 
 ScopeTable::ScopeTable(const int total_buckets, ScopeTable* parent_scope_ptr)
     : hashtable(new SymbolInfoHashTable(total_buckets)), num_deleted_children(0) {
+    this->hashtable->enclosing_scope_table_ptr = this;
     this->set_parent_scope_ptr_with_id_currentid(parent_scope_ptr);
 
     cout << "New ScopeTable with id " << this->id << " created\n";
@@ -12,7 +13,7 @@ ScopeTable::ScopeTable(const int total_buckets, ScopeTable* parent_scope_ptr)
 
 ScopeTable::~ScopeTable() {
     delete this->hashtable;
-    cout << "ScopeTable with " << this->id << " removed\n";
+    cout << "ScopeTable with id " << this->id << " removed\n";
 }
 
 /**
@@ -51,9 +52,9 @@ bool ScopeTable::delete_symbolinfo(const string& symbol_info_name) {
 /**
  * @brief Sets parent_scope_ptr attribute for this scope table. It also sets current_id (int)
  * and id (string) attribute for this scope table from the parent scope.
- * 
+ *
  * When parent scope ptr is set to nullptr, it is interpreted that the scope table has no parent
- * scope, therefore is of depth 1. 
+ * scope, therefore is of depth 1.
  */
 void ScopeTable::set_parent_scope_ptr_with_id_currentid(ScopeTable* parent_scope_ptr) {
     this->parent_scope_ptr = parent_scope_ptr;
@@ -66,8 +67,6 @@ void ScopeTable::set_parent_scope_ptr_with_id_currentid(ScopeTable* parent_scope
         this->current_id = 1;
         this->id = "1";
     }
-
-    printing_info::_scope_table_id = this->id;
 }
 
 int ScopeTable::get_num_deleted_children() {
@@ -94,6 +93,6 @@ void ScopeTable::print() {
     const string INDENT = "\t";
     cout << endl;
     cout << INDENT;
-    cout << "Scopetable " << this->id << endl;
+    cout << "Scopetable # " << this->id << endl;
     this->hashtable->print();
 }
