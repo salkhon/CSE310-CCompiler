@@ -1,0 +1,9 @@
+Line No. 0: Token <IF> Lexeme if found.
+Line No. 0: Token <FOR> Lexeme for found.
+Line No. 0: Token <DO> Lexeme do found.
+Line No. 0: Token <INT> Lexeme int found.
+Line No. 1: Token <IF> Lexeme if found.
+Line No. 1: Token <CASE> Lexeme case found.
+Line No. 2: Token <SWITCH> Lexeme switch found.
+Line No. 3: Token <CONST_INT,123> Lexeme 123 found.
+Line No. 4: Token <CONST_INT,-6> Lexeme -6 found.
