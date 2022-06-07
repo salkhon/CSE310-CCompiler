@@ -1,29 +1,54 @@
 %option noyywrap
+%option c++
 
 %{
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <string>
+    #include <iostream>
+    #include <string.h>
+    #include <string>
+    #include <fstream>
 
-using namespace std;
+    using namespace std;
 
-// counts
-int line_count = 0;
-int error_count = 0;
+    // counts
+    int line_count = 0;
+    int error_count = 0;
 
-// write files
-FILE* token_file;
-FILE* log_file;
+    // write files
+    ofstream token_file;
+    ofstream log_file;
 
-void write_files(char token[]) {
-    fprintf(token_file, "%s", token);
-    fprintf(log_file, "Line No. %d: Token %s Lexeme %s found.\n", line_count, token, yytext);
-}
+    void write_files(string token, string lexeme) {
+        token_file << token;
+        log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
+    }
 
-char get_char_from_literal_str(char char_literal[]) {
-    char quotes_removed = 
-}
+    char get_ascii_char_from_escape_literal(string escape_literal) {
+        string wo_quotes = escape_literal.substr(1, escape_literal.length()-2);
+        cout << "heer: " << wo_quotes << endl;
+        if (wo_quotes == "\\n") {
+            return '\n';
+        } else if (wo_quotes == "\\t") {
+            return '\t';
+        } else if (wo_quotes == "\\\\") {
+            return '\\';
+        } else if (wo_quotes == "\\'") {
+            return '\'';    
+        } else if (wo_quotes == "\\a") {
+            return '\a';
+        } else if (wo_quotes == "\\f") {
+            return '\f';
+        } else if (wo_quotes == "\\r") {
+            return '\r';
+        } else if (wo_quotes == "\\b") {
+            return '\b';
+        } else if (wo_quotes == "\\v") {
+            return '\v';
+        } else if (wo_quotes == "\\0") {
+            return '\0';
+        } else {
+            return '\0';
+        }
+    }
 %}
 
 
@@ -55,11 +80,13 @@ WHITESPACE [ \t]*
 
 DIGIT [0-9]
 DIGITS {DIGIT}+
-INTNUM [+-]?{DIGITS}
-FLOATNUM {INTNUM}.{DIGITS}
+INTNUM [-]?{DIGITS}
+FLOATNUM {INTNUM}?\.{DIGITS}
 EXPNUM ({INTNUM}|{FLOATNUM})[eE]{INTNUM}
 
-CHARLIT '([ -~]{-}[\n\t\\\\\\\a\f\r\b\v\0])?'
+ESCAPECHARS \\n|\\t|\\\\|\\'|\\a|\\f|\\r|\\b|\\v|\\0
+SINGLECHARLIT '[ -~]{-}[\\]'
+MULTICHARLIT '{ESCAPECHARS}'
 
 ADDOP [+-]
 MULOP [*/%]
@@ -87,107 +114,192 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGITS}|_)*
 
 
 {IFKW} {
-    char token[] = "<IF>";
-    write_files(token);
+    string token = "<IF>";
+    write_files(token, YYText());
 }
 
 {FORKW} {
-    char token[] = "<FOR>";
-    write_files(token);
+    string token = "<FOR>";
+    write_files(token, YYText());
 }
 
 {DOKW} {
-    char token[] = "<DO>";
-    write_files(token);
+    string token = "<DO>";
+    write_files(token, YYText());
 }
 
 {INTKW} {
-    char token[] = "<INT>";
-    write_files(token);
+    string token = "<INT>";
+    write_files(token, YYText());
 }
 
 {FLOATKW} {
-    char token[] = "<FLOAT>";
-    write_files(token);
+    string token = "<FLOAT>";
+    write_files(token, YYText());
 }
 
 {VOIDKW} {
-    char token[] = "<VOID>";
-    write_files(token);
+    string token = "<VOID>";
+    write_files(token, YYText());
 }
 
 {SWITCHKW} {
-    char token[] = "<SWITCH>";
-    write_files(token);
+    string token = "<SWITCH>";
+    write_files(token, YYText());
 }
 
 {DEFAULTKW} {
-    char token[] = "<DEFAULT>";
-    write_files(token);
+    string token = "<DEFAULT>";
+    write_files(token, YYText());
 }
 
 {ELSEKW} {
-    char token[] = "<ELSE>";
-    write_files(token);
+    string token = "<ELSE>";
+    write_files(token, YYText());
 }
 
 {WHILEKW} {
-    char token[] = "<WHILE>";
-    write_files(token);
+    string token = "<WHILE>";
+    write_files(token, YYText());
 }
 
 {BREAKKW} {
-    char token[] = "<BREAK>";
-    write_files(token);
+    string token = "<BREAK>";
+    write_files(token, YYText());
 }
 
 {CHARKW} {
-    char token[] = "<CHAR>";
-    write_files(token);
+    string token = "<CHAR>";
+    write_files(token, YYText());
 }
 
 {DOUBLEKW} {
-    char token[] = "<DOUBLE>";
-    write_files(token);
+    string token = "<DOUBLE>";
+    write_files(token, YYText());
 }
 
 {RETURNKW} {
-    char token[] = "<RETURN>";
-    write_files(token);
+    string token = "<RETURN>";
+    write_files(token, YYText());
 }
 
 {CASEKW} {
-    char token[] = "<CASE>";
-    write_files(token);
+    string token = "<CASE>";
+    write_files(token, YYText());
 }
 
 {CONTINUEKW} {
-    char token[] = "<CONTINUE>";
-    write_files(token);
+    string token = "<CONTINUE>";
+    write_files(token, YYText());
 }
 
 
 {INTNUM} {
-    char token[30] = "<CONST_INT,";
-    strcat(token, yytext);
-    strcat(token, ">");
-    write_files(token);
+    string token = string("<CONST_INT,") + string(YYText()) + string(">");
+    write_files(token, YYText());
 }
 
 {FLOATNUM} {
-    char token[30] = "<CONST_FLOAT,";
-    strcat(token, yytext);
-    strcat(token, ">");
-    write_files(token);
+    string token = string("<CONST_FLOAT,") + string(YYText()) + string(">");
+    write_files(token, YYText());
 }
 
-{CHARLIT} {
-    char token[20]  = "<CONST_CHAR,";
-    strcat(token, yytext);
-    strcat(token, ">");
-    write_files(token);
+{SINGLECHARLIT} {
+    char char_wo_quotes = string(YYText())[1];
+    if (char_wo_quotes == '\'') {
+        char_wo_quotes = '\0';
+    }
+    string token = string("<CONST_CHAR,") + char_wo_quotes + string(">");
+    write_files(token, YYText());
 }
 
+{MULTICHARLIT} {
+    char escape_char = get_ascii_char_from_escape_literal(YYText());
+    string token = string("<CONST_CHAR,") + escape_char + ">";
+    write_files(token, YYText());
+}
+
+
+{ADDOP} {
+    string token = string("<ADDOP,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{MULOP} {
+    string token = string("<MULOP,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{INCOP} {
+    string token = string("<INCOP,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{RELOP} {
+    string token = string("<RELOP,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{ASSIGNOP} {
+    string token = string("<ASSIGNOP,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{LOGICOP} {
+    string token = string("<LOGICOP,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{NOT} {
+    string token = string("<NOT,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{LPAREN} {
+    string token = string("<LPAREN,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{RPAREN} {
+    string token = string("<RPAREN,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{LCURL} {
+    string token = string("<LCURL,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{RCURL} {
+    string token = string("<RCURL,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{LTHIRD} {
+    string token = string("<LTHIRD,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{RTHIRD} {
+    string token = string("<RTHIRD,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{COMMA} {
+    string token = string("<COMMA,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+{SEMICOLON} {
+    string token = string("<SEMICOLON,") + YYText() + string(">");
+    write_files(token, YYText());
+}
+
+
+{ID} {
+    string token = string("<ID,") + YYText() + string(">");
+    write_files(token, YYText());
+}
 
 {NEWLINE} {
     line_count++;
@@ -200,25 +312,25 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGITS}|_)*
 
 int main(int argc, char* argv[]) {
     if (argc != 4) {
-        printf("ERROR: lexer needs input, token, log file names as argument\n");
+        cout << "ERROR: lexer needs input, token, log file names as argument\n";
         return 0;
     }
 
-    FILE* input_file = fopen(argv[1], "r");
-    token_file = fopen(argv[2], "w");
-    log_file = fopen(argv[3], "w");
+    ifstream input_file(argv[1]);
+    token_file.open(argv[2]);
+    log_file.open(argv[3]);
 
-    if (input_file == NULL || token_file == NULL || log_file == NULL) {
-        printf("ERROR: Could not open file\n");
+    if (!input_file || !token_file || !log_file) {
+        cout << "ERROR: Could not open file\n";
         return 0;
     }
 
-    yyin = input_file;
-    yylineno = 1;
-    yylex();
+    yyFlexLexer lexer(&input_file);
+    while (lexer.yylex()) {}
 
-    fclose(yyin);
-    fclose(token_file);
-    fclose(log_file);
+    input_file.close();
+    token_file.close();
+    log_file.close();
+
     return 0;
 }
