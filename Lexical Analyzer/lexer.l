@@ -13,6 +13,9 @@
     int line_count = 0;
     int error_count = 0;
 
+    // string buffer
+    string matched_str;
+
     // write files
     ofstream token_file;
     ofstream log_file;
@@ -21,40 +24,12 @@
         token_file << token;
         log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
     }
-
-    char get_ascii_char_from_escape_literal(string escape_literal) {
-        string wo_quotes = escape_literal.substr(1, escape_literal.length()-2);
-        cout << "heer: " << wo_quotes << endl;
-        if (wo_quotes == "\\n") {
-            return '\n';
-        } else if (wo_quotes == "\\t") {
-            return '\t';
-        } else if (wo_quotes == "\\\\") {
-            return '\\';
-        } else if (wo_quotes == "\\'") {
-            return '\'';    
-        } else if (wo_quotes == "\\a") {
-            return '\a';
-        } else if (wo_quotes == "\\f") {
-            return '\f';
-        } else if (wo_quotes == "\\r") {
-            return '\r';
-        } else if (wo_quotes == "\\b") {
-            return '\b';
-        } else if (wo_quotes == "\\v") {
-            return '\v';
-        } else if (wo_quotes == "\\0") {
-            return '\0';
-        } else {
-            return '\0';
-        }
-    }
 %}
 
 
 %x BLOCK_COMMENT
 %x LINE_COMMENT
-%x SINGLELINE_STRING
+%x STRING
 %X MULTILINE_STRING
 
 
@@ -75,7 +50,6 @@ RETURNKW return
 CASEKW case
 CONTINUEKW continue
 
-NEWLINE \n
 WHITESPACE [ \t]*
 
 DIGIT [0-9]
@@ -84,8 +58,32 @@ INTNUM [-]?{DIGITS}
 FLOATNUM {INTNUM}?\.{DIGITS}
 EXPNUM ({INTNUM}|{FLOATNUM})[eE]{INTNUM}
 
-ESCAPECHARS \\n|\\t|\\\\|\\'|\\a|\\f|\\r|\\b|\\v|\\0
-SINGLECHARLIT '[ -~]{-}[\\]'
+ALERT \a
+ALERTLIT \\a
+BACKSPACE \b
+BACKSPACELIT \\b
+FORMFEED \f
+FORMFEEDLIT \\f
+NEWLINE \n
+NEWLINELIT \\n
+CR \r
+CRLIT \\r
+TAB \t
+TABLIT \\t
+VERTICALTAB \v
+VERTICALTABLIT \\v
+BACKSLASH \\
+BACKSLASHLIT \\\\
+SINGLEQUOTES \'
+SINGLEQUOTESLIT \\'
+DOUBLEQUOTES \"
+DOUBLEQUOTESLIT \\\"
+
+ESCAPEDCHARS {ALERT}|{BACKSPACE}|{FORMFEED}|{NEWLINE}|{CR}|{TAB}|{VERTICALTAB}|{BACKSLASH}|{SINGLEQUOTES}|{DOUBLEQUOTES}
+
+ESCAPEDLINEBREAK \\\n
+ESCAPEDTAB \\\t
+SINGLECHARLIT [ -~]
 MULTICHARLIT '{ESCAPECHARS}'
 
 ADDOP [+-]
@@ -108,6 +106,8 @@ ALPHABET [a-zA-Z]
 ALPHABETS {ALPHABET}+
 
 ID ({ALPHABET}|_)({ALPHABET}|{DIGITS}|_)*
+
+QUOTES \"
 
 
 %%
@@ -204,18 +204,59 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGITS}|_)*
     write_files(token, YYText());
 }
 
-{SINGLECHARLIT} {
+'{SINGLECHARLIT}' {
     char char_wo_quotes = string(YYText())[1];
-    if (char_wo_quotes == '\'') {
-        char_wo_quotes = '\0';
-    }
     string token = string("<CONST_CHAR,") + char_wo_quotes + string(">");
     write_files(token, YYText());
 }
 
-{MULTICHARLIT} {
-    char escape_char = get_ascii_char_from_escape_literal(YYText());
-    string token = string("<CONST_CHAR,") + escape_char + ">";
+'{ALERTLIT}' {
+    string token = string("<CONST_CHAR,") + '\a' + string(">");
+    write_files(token, YYText());
+}
+
+'{BACKSPACELIT}' {
+    string token = string("<CONST_CHAR,") + '\b' + string(">");
+    write_files(token, YYText());
+}
+
+'{FORMFEEDLIT}' {
+    string token = string("<CONST_CHAR,") + '\f' + string(">");
+    write_files(token, YYText());
+}
+
+'{NEWLINELIT}' {
+    string token = string("<CONST_CHAR,") + '\t' + string(">");
+    write_files(token, YYText());
+}
+
+'{CRLIT}' {
+    string token = string("<CONST_CHAR,") + '\r' + string(">");
+    write_files(token, YYText());
+}
+
+'{TABLIT}' {
+    string token = string("<CONST_CHAR,") + '\t' + string(">");
+    write_files(token, YYText());
+}
+
+'{VERTICALTABLIT}' {
+    string token = string("<CONST_CHAR,") + '\v' + string(">");
+    write_files(token, YYText());
+}
+
+'{BACKSLASHLIT}' {
+    string token = string("<CONST_CHAR,") + '\\' + string(">");
+    write_files(token, YYText());
+}
+
+'{SINGLEQUOTESLIT}' {
+    string token = string("<CONST_CHAR,") + '\'' + string(">");
+    write_files(token, YYText());
+}
+
+'({DOUBLEQUOTESLIT}|{DOUBLEQUOTES})' {
+    string token = string("<CONST_CHAR,") + '\"' + string(">");
     write_files(token, YYText());
 }
 
@@ -299,6 +340,46 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGITS}|_)*
 {ID} {
     string token = string("<ID,") + YYText() + string(">");
     write_files(token, YYText());
+}
+
+
+{QUOTES} {
+    BEGIN STRING;
+    matched_str = "";
+}
+
+<STRING>{QUOTES} {
+    string token = string("<STRING,") + matched_str + string(">");
+    write_files(token, matched_str);
+    BEGIN INITIAL;
+} 
+
+<STRING>{NEWLINELIT} {
+    matched_str += '\n';
+}
+
+<STRING>{TABLIT} {
+    matched_str += '\t';
+}
+
+<STRING>{CRLIT} {
+    matched_str += '\r';
+}
+
+<STRING>{BACKSPACELIT} {
+    matched_str += '\b';
+}
+
+<STRING>{FORMFEEDLIT} {
+    matched_str += '\f';
+}
+
+<STRING>\\. {
+    matched_str += YYText()[1];
+}
+
+<STRING>[^\\\n\"] {
+    matched_str += YYText();
 }
 
 {NEWLINE} {
