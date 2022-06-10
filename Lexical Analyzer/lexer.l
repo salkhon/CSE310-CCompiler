@@ -15,7 +15,10 @@
     int pending_line_inc = 0;
     int error_count = 0;
 
-    // string buffer
+    // buffer
+    string matched_literal;
+
+    char matched_char;
     string matched_str;
     string matched_comment;
 
@@ -23,21 +26,25 @@
     ofstream token_file;
     ofstream log_file;
     
-    void write_files(string token, string lexeme) {
+    void write_token_and_log(string token, string lexeme) {
         token_file << token;
         log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
     }
 
-    void write_log_only(string log) {
-        log_file << "Line No. " << line_count << ": [ERROR] " << log << endl;
+    void write_error_log(string log, string lexeme = "") {
+        error_count++;
+        log_file << "Line No. " << line_count << ": [ERROR] " << log << " Lexeme: " << lexeme << endl;
     }
 %}
 
 
 %x BLOCK_COMMENT
 %x LINE_COMMENT
+%x CHAR
+%x ERR_MULTIPLE_CHAR
 %x STRING
 
+UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>+=_\-\|\/\\;:'\",\.\? ]
 
 IF_KW if
 FOR_KW for
@@ -89,7 +96,9 @@ SINGLEQUOTES_LIT \\'
 DOUBLEQUOTES \"
 DOUBLEQUOTES_LIT \\\"
 
-ESCAPED_CHARS {ALERT}|{BACKSPACE}|{FORMFEED}|{NEWLINE}|{CR}|{TAB}|{VERTICALTAB}|{BACKSLASH}|{SINGLEQUOTES}|{DOUBLEQUOTES}|{NULLCHAR}
+ESCAPED_CHARS_SPECIAL {ALERT}|{BACKSPACE}|{FORMFEED}|{NEWLINE}|{CR}|{TAB}|{VERTICALTAB}|{NULLCHAR}
+ESCAPED_CHARS_SPECIAL_EXCEPT_NL {ALERT}|{BACKSPACE}|{FORMFEED}|{TAB}|{VERTICALTAB}|{NULLCHAR}
+ESCAPED_CHARS_NORMAL {BACKSLASH}|{SINGLEQUOTES}|{DOUBLEQUOTES}
 
 SINGLECHAR [ -~]
 
@@ -123,22 +132,22 @@ ALPHABETS {ALPHABET}+
 
 ID ({ALPHABET}|_)({ALPHABET}|{DIGIT}|_)*
 
-BLOCK_COMMENT_START \/\*\*
-BLOCK_COMMENT_END \*\*\/
+BLOCK_COMMENT_START \/\*
+BLOCK_COMMENT_END \*\/
 
 STRING_NORMAL_CHAR [^\\\n\"]
 LINE_COMMENT_NORMAL_CHAR [^\n]
 
-ERR_MULTIPLE_CHAR '{SINGLECHAR_LIT}{2,}|{ANY_ESCAPED_CHAR_LIT}{2,}'
-ERR_UNFINISHED_CHAR '(([ -~]{-}[\a\b\f\n\r\t\v\0\\'])|{ANY_ESCAPED_CHAR_LIT})?
-ERR_EMPTY_CHAR ''
-ERR_UNRECOGNIZED_CHAR '([^ -~]|{ESCAPED_CHARS})'
 ERR_TOO_MANY_DECIMAL ({DIGITS}?\.{DIGITS}?){2,}
-ERR_ILL_FORMED_NUM {EXPNUM}{FLOATNUM}
+ERR_ILL_FORMED_NUM {EXPNUM}\.{DIGITS}?
 ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 %%
+
+{UNRECOGNIZED_CHARSET} {
+    write_error_log("Unrecognized character.", YYText());
+}
 
 {ALL_KW} {
     string token = string("<");
@@ -146,7 +155,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         token += toupper(c);
     }
     token += ">";
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 
@@ -157,201 +166,326 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 {INTNUM} {
     string token = string("<CONST_INT,") + string(YYText()) + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {FLOATNUM} {
     string token = string("<CONST_FLOAT,") + string(YYText()) + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
-'{SINGLECHAR_LIT}' {
-    char char_wo_quotes = string(YYText())[1];
-    string token = string("<CONST_CHAR,") + char_wo_quotes + string(">");
-    write_files(token, YYText());
+
+{SINGLEQUOTES} {
+    matched_char = -1; // used fo matching chars
+    matched_literal = ""; // used for error lexeme
+    BEGIN CHAR;
 }
 
-'{ALERT_LIT}' {
-    string token = string("<CONST_CHAR,") + '\a' + string(">");
-    write_files(token, YYText());
+<CHAR>{SINGLEQUOTES} {
+    if (matched_char == -1) {
+        string lexeme = "''";
+        write_error_log("Empty character constant.", lexeme);
+    } else {
+        string token = string("<CONST_CHAR,") + matched_char + string(">");
+        string lexeme = string("'") + matched_literal + string("'");
+        write_token_and_log(token, lexeme);
+    }
+
+    BEGIN INITIAL;
 }
 
-'{BACKSPACE_LIT}' {
-    string token = string("<CONST_CHAR,") + '\b' + string(">");
-    write_files(token, YYText());
+<CHAR>{NEWLINE} {
+    string lexeme = string("'") + matched_literal;
+    write_error_log("Unterminated character.", lexeme);
+
+    line_count++;
+
+    BEGIN INITIAL;
 }
 
-'{FORMFEED_LIT}' {
-    string token = string("<CONST_CHAR,") + '\f' + string(">");
-    write_files(token, YYText());
+<CHAR,ERR_MULTIPLE_CHAR>{ESCAPED_CHARS_SPECIAL_EXCEPT_NL} {
+    write_error_log("Not a valid character.", YYText());
 }
 
-'{NEWLINE_LIT}' {
-    string token = string("<CONST_CHAR,") + '\n' + string(">");
-    write_files(token, YYText());
+<CHAR>{SINGLECHAR_LIT} {
+    if (matched_char == -1) {
+        matched_char = YYText()[0];
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText(); 
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
 }
 
-'{CR_LIT}' {
-    string token = string("<CONST_CHAR,") + '\r' + string(">");
-    write_files(token, YYText());
+<CHAR>{ALERT_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\a';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
 }
 
-'{TAB_LIT}' {
-    string token = string("<CONST_CHAR,") + '\t' + string(">");
-    write_files(token, YYText());
+<CHAR>{BACKSPACE_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\b';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
 }
 
-'{VERTICALTAB_LIT}' {
-    string token = string("<CONST_CHAR,") + '\v' + string(">");
-    write_files(token, YYText());
+<CHAR>{FORMFEED_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\f';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
 }
 
-'{NULLCHAR_LIT}' {
-    string token = string("<CONST_CHAR,") + '\0' + string(">");
-    write_files(token, YYText());
+<CHAR>{NEWLINE_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\n';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
 }
 
-'{ANY_ESCAPED_CHAR_LIT}' {
-    string token = string("<CONST_CHAR,") + YYText()[2] + string(">");
-    write_files(token, YYText());
+<CHAR>{CR_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\r';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
+}
+
+<CHAR>{TAB_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\t';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
+}
+
+<CHAR>{VERTICALTAB_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\v';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
+}
+
+<CHAR>{NULLCHAR_LIT} {
+    if (matched_char == -1) {
+        matched_char = '\0';
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
+}
+
+<CHAR>{ANY_ESCAPED_CHAR_LIT} {
+    if (matched_char == -1) {
+        matched_char = YYText()[1];
+        matched_literal += YYText(); // might need if error occurs
+    } else {
+        matched_literal += YYText();
+        BEGIN INITIAL;
+        BEGIN ERR_MULTIPLE_CHAR;
+    }
+}
+
+<ERR_MULTIPLE_CHAR>{SINGLEQUOTES} {
+    string lexeme = string("'") + matched_literal + string("'");
+    write_error_log("Multiple character constant error.", lexeme);
+
+    BEGIN INITIAL;
+}
+
+<ERR_MULTIPLE_CHAR>{NEWLINE} {
+    string lexeme = string("'") + matched_literal;
+    write_error_log("Unterminated character.", lexeme);
+
+    line_count++;
+
+    BEGIN INITIAL;
+}
+
+<ERR_MULTIPLE_CHAR>[ -~]{-}[\n\'] {
+    matched_literal += YYText();
 }
 
 
 {ADDOP} {
     string token = string("<ADDOP,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {MULOP} {
     string token = string("<MULOP,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {INCOP} {
     string token = string("<INCOP,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {RELOP} {
     string token = string("<RELOP,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {ASSIGNOP} {
     string token = string("<ASSIGNOP,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {LOGICOP} {
     string token = string("<LOGICOP,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {NOT} {
     string token = string("<NOT,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {LPAREN} {
     string token = string("<LPAREN,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {RPAREN} {
     string token = string("<RPAREN,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {LCURL} {
     string token = string("<LCURL,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {RCURL} {
     string token = string("<RCURL,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {LTHIRD} {
     string token = string("<LTHIRD,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {RTHIRD} {
     string token = string("<RTHIRD,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {COMMA} {
     string token = string("<COMMA,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 {SEMICOLON} {
     string token = string("<SEMICOLON,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 
 {ID} {
     string token = string("<ID,") + YYText() + string(">");
-    write_files(token, YYText());
+    write_token_and_log(token, YYText());
 }
 
 
 {DOUBLEQUOTES} {
     BEGIN STRING;
     matched_str = "";
+    matched_literal = "";
     pending_line_inc = 0;
 }
 
 <STRING>{DOUBLEQUOTES} {
     string token = string("<STRING,") + matched_str + string(">");
-    write_files(token, matched_str);
+    string lexeme = string("\"") + matched_literal + string("\"");
+    write_token_and_log(token, lexeme);
+
     line_count += pending_line_inc;
+
     BEGIN INITIAL;
 } 
 
 <STRING>{ESCAPED_LINE_BREAK} {
     pending_line_inc++;
-    matched_str += '\n';
+    matched_literal += YYText();
 }
 
 <STRING>{NEWLINE_LIT} {
     matched_str += '\n';
+    matched_literal += YYText();
 }
 
 <STRING>{TAB_LIT} {
     matched_str += '\t';
+    matched_literal += YYText();
 }
 
 <STRING>{CR_LIT} {
     pending_line_inc++;
     matched_str += '\r';
+    matched_literal += YYText();
 }
 
 <STRING>{BACKSPACE_LIT} {
     matched_str += '\b';
+    matched_literal += YYText();
 }
 
 <STRING>{FORMFEED_LIT} {
     matched_str += '\f';
+    matched_literal += YYText();
 }
 
 <STRING>{ANY_ESCAPED_CHAR_LIT} {
     matched_str += YYText()[1];
+    matched_literal += YYText();
 }
 
 <STRING>{STRING_NORMAL_CHAR} {
     matched_str += YYText();
+    matched_literal += YYText();
 }
 
 <STRING>{NEWLINE} {
     line_count += pending_line_inc; // so error can point to actual line
-    write_log_only("Unfinished string");
-    line_count -= pending_line_inc;
-    pending_line_inc++;
-    // not exiting string state, allows detection of further errors after string has been terminated
+    string lexeme = string("\"") + matched_literal;
+    write_error_log("Unterminated string.", lexeme);
+
+    line_count++;
+
+    BEGIN INITIAL;
 }
 
 
@@ -363,15 +497,18 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <LINE_COMMENT>{NEWLINE} {
     string token = "<COMMENT," + matched_comment + string(">");
-    write_files(token, matched_comment);
+    string lexeme = "//" + matched_comment;
+    write_token_and_log(token, lexeme);
+
     line_count += pending_line_inc + 1;
     pending_line_inc = 0;
+
     BEGIN INITIAL;
 }
 
 <LINE_COMMENT>{ESCAPED_LINE_BREAK} {
     pending_line_inc++;
-    matched_comment += '\n';
+    matched_comment += YYText();
 }
 
 <LINE_COMMENT>{LINE_COMMENT_NORMAL_CHAR} {
@@ -387,21 +524,25 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <BLOCK_COMMENT>{BLOCK_COMMENT_END} {
     string token = "<COMMENT," + matched_comment + string(">");
-    write_files(token, matched_comment);
+    string lexeme = string("\\**") + matched_comment + string("**\\");
+    write_token_and_log(token, lexeme);
+
     line_count += pending_line_inc;
-    pending_line_inc = 0;
+
     BEGIN INITIAL;
 }
 
 <BLOCK_COMMENT>{NEWLINE} {
-    matched_comment += '\n';
     pending_line_inc++;
 }
 
 <BLOCK_COMMENT><<EOF>> {
-    write_log_only("Unfinished comment.");
+    string lexeme = string("\\**") + matched_comment;
+    write_error_log("Unterminated comment.", lexeme);
+
     line_count += pending_line_inc;
     pending_line_inc = 0;
+
     BEGIN INITIAL;
 }
 
@@ -414,36 +555,16 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     line_count++;
 }
 
-
-{ERR_MULTIPLE_CHAR} {
-    write_log_only("Multiple character constant.");
-}
-
-{ERR_UNFINISHED_CHAR} {
-    write_log_only("Unfinished character.");
-}
-
-{ERR_EMPTY_CHAR} {
-    write_log_only("Empty character constant.");
-}
-
-{ERR_UNRECOGNIZED_CHAR} {
-    if (YYText()[1] == '\n') {
-        line_count++;
-    }
-    write_log_only("Unrecognized character.");
-}
-
 {ERR_TOO_MANY_DECIMAL} {
-    write_log_only("Too many decimals");    
+    write_error_log("Too many decimals.", YYText());    
 }
 
 {ERR_ILL_FORMED_NUM} {
-    write_log_only("Ill formed number.");
+    write_error_log("Ill formed number.", YYText());
 }
 
 {ERR_INVALID_SUFF_PREF} {
-    write_log_only("Invalid suffix on numberic constant or invalid prefix on identifier.");
+    write_error_log("Invalid suffix on numberic constant or invalid prefix on identifier.", YYText());
 }
 
 
@@ -467,6 +588,9 @@ int main(int argc, char* argv[]) {
 
     yyFlexLexer lexer(&input_file);
     while (lexer.yylex()) {}
+
+    log_file << "Total lines: " << line_count << endl;
+    log_file << "Total errors: " << error_count; 
 
     input_file.close();
     token_file.close();
