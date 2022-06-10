@@ -29,7 +29,7 @@
 
     const int SYM_TABLE_BUCKETS = 10;
 
-    SymbolTable symbol_table(SYM_TABLE_BUCKETS);
+    SymbolTable symbol_table(SYM_TABLE_BUCKETS, log_file);
     
     void write_token_and_log(string token, string lexeme) {
         token_file << token;
@@ -170,15 +170,17 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {INTNUM} {
     string token = string("<CONST_INT,") + string(YYText()) + string(">");
     write_token_and_log(token, YYText());
-    symbol_table.insert(YYText(), "CONST_INT");
-    log_file << symbol_table;
+    if (symbol_table.insert(YYText(), "CONST_INT")) {
+        log_file << symbol_table;
+    }
 }
 
 {FLOATNUM} {
     string token = string("<CONST_FLOAT,") + string(YYText()) + string(">");
     write_token_and_log(token, YYText());
-    symbol_table.insert(YYText(), "CONST_FLOAT");
-    log_file << symbol_table;
+    if (symbol_table.insert(YYText(), "CONST_FLOAT")) {
+        log_file << symbol_table;
+    }
 }
 
 
@@ -196,8 +198,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         string token = string("<CONST_CHAR,") + matched_char + string(">");
         string lexeme = string("'") + matched_literal + string("'");
         write_token_and_log(token, lexeme);
-        symbol_table.insert(string(1, matched_char), "CONST_CHAR");
-        log_file << symbol_table;
+        if (symbol_table.insert(string(1, matched_char), "CONST_CHAR")) {
+            log_file << symbol_table;
+        }
     }
 
     BEGIN INITIAL;
@@ -428,8 +431,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {ID} {
     string token = string("<ID,") + YYText() + string(">");
     write_token_and_log(token, YYText());
-    symbol_table.insert(YYText(), "ID");
-    log_file << symbol_table;
+    if (symbol_table.insert(YYText(), "ID")) {
+        log_file << symbol_table;
+    }
 }
 
 
@@ -511,7 +515,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <LINE_COMMENT>{NEWLINE} {
     string token = "<COMMENT," + matched_comment + string(">");
     string lexeme = "//" + matched_comment;
-    write_token_and_log(token, lexeme);
+    log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
 
     line_count += pending_line_inc + 1;
     pending_line_inc = 0;
@@ -538,7 +542,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <BLOCK_COMMENT>{BLOCK_COMMENT_END} {
     string token = "<COMMENT," + matched_comment + string(">");
     string lexeme = string("\\**") + matched_comment + string("**\\");
-    write_token_and_log(token, lexeme);
+    log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
 
     line_count += pending_line_inc;
 

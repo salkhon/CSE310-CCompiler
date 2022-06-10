@@ -54,18 +54,7 @@ Line No. 4: Token <ID,str2> Lexeme str2 found.
 ==========================------X------=================================
 Line No. 4: Token <LTHIRD,[> Lexeme [ found.
 Line No. 4: Token <CONST_INT,100> Lexeme 100 found.
-==========================Symbol Table==================================
-
-	Scopetable # 1.1
-
-		Bucket 6 : <str1, ID> 
-		Bucket 7 : <str2, ID> 
-		Bucket 9 : <100, CONST_INT> 
-
-	Scopetable # 1
-
-		Bucket 3 : <main, ID> 
-==========================------X------=================================
+Symbol <CONST_INT, 100> already exists on the symbol table.
 Line No. 4: Token <RTHIRD,]> Lexeme ] found.
 Line No. 4: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 4: Token <STRING,I own a dog.    His name is Jack.> Lexeme "I own a dog.\
@@ -88,19 +77,7 @@ Line No. 6: Token <ID,str3> Lexeme str3 found.
 ==========================------X------=================================
 Line No. 6: Token <LTHIRD,[> Lexeme [ found.
 Line No. 6: Token <CONST_INT,100> Lexeme 100 found.
-==========================Symbol Table==================================
-
-	Scopetable # 1.1
-
-		Bucket 6 : <str1, ID> 
-		Bucket 7 : <str2, ID> 
-		Bucket 8 : <str3, ID> 
-		Bucket 9 : <100, CONST_INT> 
-
-	Scopetable # 1
-
-		Bucket 3 : <main, ID> 
-==========================------X------=================================
+Symbol <CONST_INT, 100> already exists on the symbol table.
 Line No. 6: Token <RTHIRD,]> Lexeme ] found.
 Line No. 6: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 6: Token <STRING,He said, " I own a dog"    so I asked, "What is his name?"> Lexeme "He said, \" I own a dog\"\
@@ -131,19 +108,7 @@ Line No. 15: Token <ID,str4> Lexeme str4 found.
 ==========================------X------=================================
 Line No. 15: Token <LTHIRD,[> Lexeme [ found.
 Line No. 15: Token <CONST_INT,100> Lexeme 100 found.
-==========================Symbol Table==================================
-
-	Scopetable # 1.1
-
-		Bucket 6 : <str1, ID> 
-		Bucket 7 : <str2, ID> 
-		Bucket 8 : <str3, ID> 
-		Bucket 9 : <100, CONST_INT> <str4, ID> 
-
-	Scopetable # 1
-
-		Bucket 3 : <main, ID> 
-==========================------X------=================================
+Symbol <CONST_INT, 100> already exists on the symbol table.
 Line No. 15: Token <RTHIRD,]> Lexeme ] found.
 Line No. 15: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 15: Token <STRING,But this line is valid.> Lexeme "But this line is valid." found.
@@ -167,20 +132,7 @@ Line No. 17: Token <ID,str5> Lexeme str5 found.
 ==========================------X------=================================
 Line No. 17: Token <LTHIRD,[> Lexeme [ found.
 Line No. 17: Token <CONST_INT,100> Lexeme 100 found.
-==========================Symbol Table==================================
-
-	Scopetable # 1.1
-
-		Bucket 0 : <str5, ID> 
-		Bucket 6 : <str1, ID> 
-		Bucket 7 : <str2, ID> 
-		Bucket 8 : <str3, ID> 
-		Bucket 9 : <100, CONST_INT> <str4, ID> 
-
-	Scopetable # 1
-
-		Bucket 3 : <main, ID> 
-==========================------X------=================================
+Symbol <CONST_INT, 100> already exists on the symbol table.
 Line No. 17: Token <RTHIRD,]> Lexeme ] found.
 Line No. 17: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 17: Token <STRING,This line is also valid.> Lexeme "This line is also valid." found.
@@ -205,21 +157,7 @@ Line No. 19: Token <ID,str6> Lexeme str6 found.
 ==========================------X------=================================
 Line No. 19: Token <LTHIRD,[> Lexeme [ found.
 Line No. 19: Token <CONST_INT,100> Lexeme 100 found.
-==========================Symbol Table==================================
-
-	Scopetable # 1.1
-
-		Bucket 0 : <str5, ID> 
-		Bucket 1 : <str6, ID> 
-		Bucket 6 : <str1, ID> 
-		Bucket 7 : <str2, ID> 
-		Bucket 8 : <str3, ID> 
-		Bucket 9 : <100, CONST_INT> <str4, ID> 
-
-	Scopetable # 1
-
-		Bucket 3 : <main, ID> 
-==========================------X------=================================
+Symbol <CONST_INT, 100> already exists on the symbol table.
 Line No. 19: Token <RTHIRD,]> Lexeme ] found.
 Line No. 19: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 19: Token <STRING,Really Tony?> Lexeme "Really Tony?" found.

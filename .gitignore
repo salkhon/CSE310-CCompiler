@@ -36,3 +36,4 @@
 *.pptx
 output.txt
 test/
+lex.yy.cc
