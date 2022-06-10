@@ -1,20 +1,71 @@
 Line No. 1: Token <INT> Lexeme int found.
 Line No. 1: Token <ID,main> Lexeme main found.
+==========================Symbol Table==================================
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 1: Token <LPAREN,(> Lexeme ( found.
 Line No. 1: Token <RPAREN,)> Lexeme ) found.
 Line No. 1: Token <LCURL,{> Lexeme { found.
 Line No. 3: Token <CHAR> Lexeme char found.
 Line No. 3: Token <ID,str1> Lexeme str1 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 3: Token <LTHIRD,[> Lexeme [ found.
 Line No. 3: Token <CONST_INT,100> Lexeme 100 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 9 : <100, CONST_INT> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 3: Token <RTHIRD,]> Lexeme ] found.
 Line No. 3: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 3: Token <STRING,I own a dog.> Lexeme "I own a dog." found.
 Line No. 3: Token <SEMICOLON,;> Lexeme ; found.
 Line No. 4: Token <CHAR> Lexeme char found.
 Line No. 4: Token <ID,str2> Lexeme str2 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 9 : <100, CONST_INT> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 4: Token <LTHIRD,[> Lexeme [ found.
 Line No. 4: Token <CONST_INT,100> Lexeme 100 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 9 : <100, CONST_INT> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 4: Token <RTHIRD,]> Lexeme ] found.
 Line No. 4: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 4: Token <STRING,I own a dog.    His name is Jack.> Lexeme "I own a dog.\
@@ -22,8 +73,34 @@ Line No. 4: Token <STRING,I own a dog.    His name is Jack.> Lexeme "I own a dog
 Line No. 5: Token <SEMICOLON,;> Lexeme ; found.
 Line No. 6: Token <CHAR> Lexeme char found.
 Line No. 6: Token <ID,str3> Lexeme str3 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 6: Token <LTHIRD,[> Lexeme [ found.
 Line No. 6: Token <CONST_INT,100> Lexeme 100 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 6: Token <RTHIRD,]> Lexeme ] found.
 Line No. 6: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 6: Token <STRING,He said, " I own a dog"    so I asked, "What is his name?"> Lexeme "He said, \" I own a dog\"\
@@ -39,8 +116,34 @@ Line No. 12: Token <COMMENT,This is also a /*Multi-line just for\
 Line No. 14: Token <COMMENT,This is another single line comment\ > Lexeme //This is another single line comment\  found.
 Line No. 15: Token <CHAR> Lexeme char found.
 Line No. 15: Token <ID,str4> Lexeme str4 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 15: Token <LTHIRD,[> Lexeme [ found.
 Line No. 15: Token <CONST_INT,100> Lexeme 100 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 15: Token <RTHIRD,]> Lexeme ] found.
 Line No. 15: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 15: Token <STRING,But this line is valid.> Lexeme "But this line is valid." found.
@@ -48,8 +151,36 @@ Line No. 15: Token <SEMICOLON,;> Lexeme ; found.
 Line No. 16: Token <COMMENT,This is another /*Multi-line again\ > Lexeme //This is another /*Multi-line again\  found.
 Line No. 17: Token <CHAR> Lexeme char found.
 Line No. 17: Token <ID,str5> Lexeme str5 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 0 : <str5, ID> 
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 17: Token <LTHIRD,[> Lexeme [ found.
 Line No. 17: Token <CONST_INT,100> Lexeme 100 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 0 : <str5, ID> 
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 17: Token <RTHIRD,]> Lexeme ] found.
 Line No. 17: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 17: Token <STRING,This line is also valid.> Lexeme "This line is also valid." found.
@@ -57,14 +188,59 @@ Line No. 17: Token <SEMICOLON,;> Lexeme ; found.
 Line No. 18: Token <COMMENT,Tony said, \"This is still easy.\"> Lexeme //Tony said, \"This is still easy.\" found.
 Line No. 19: Token <CHAR> Lexeme char found.
 Line No. 19: Token <ID,str6> Lexeme str6 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 0 : <str5, ID> 
+		Bucket 1 : <str6, ID> 
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 19: Token <LTHIRD,[> Lexeme [ found.
 Line No. 19: Token <CONST_INT,100> Lexeme 100 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 0 : <str5, ID> 
+		Bucket 1 : <str6, ID> 
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 19: Token <RTHIRD,]> Lexeme ] found.
 Line No. 19: Token <ASSIGNOP,=> Lexeme = found.
 Line No. 19: Token <STRING,Really Tony?> Lexeme "Really Tony?" found.
 Line No. 19: Token <SEMICOLON,;> Lexeme ; found.
 Line No. 22: Token <RETURN> Lexeme return found.
 Line No. 22: Token <CONST_INT,0> Lexeme 0 found.
+==========================Symbol Table==================================
+
+	Scopetable # 1.1
+
+		Bucket 0 : <str5, ID> 
+		Bucket 1 : <str6, ID> 
+		Bucket 6 : <str1, ID> 
+		Bucket 7 : <str2, ID> 
+		Bucket 8 : <str3, ID> <0, CONST_INT> 
+		Bucket 9 : <100, CONST_INT> <str4, ID> 
+
+	Scopetable # 1
+
+		Bucket 3 : <main, ID> 
+==========================------X------=================================
 Line No. 22: Token <SEMICOLON,;> Lexeme ; found.
 Line No. 25: Token <RCURL,}> Lexeme } found.
 Total lines: 25

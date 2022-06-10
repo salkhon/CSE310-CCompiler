@@ -43,4 +43,6 @@ public:
     bool delete_symbolinfo(const string& symbol_info_name);
 
     void print();
+
+    friend ostream& operator<<(ostream&, ScopeTable&);
 };

@@ -33,4 +33,6 @@ public:
     void print_current_scope_table();
 
     void print_all_scope_tables();
+
+    friend ostream& operator<<(ostream&, SymbolTable&);
 };

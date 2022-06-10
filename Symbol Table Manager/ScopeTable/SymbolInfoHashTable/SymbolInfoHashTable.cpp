@@ -70,12 +70,12 @@ bool SymbolInfoHashTable::insert(const string& symbol_info_name, const string& s
         SymbolInfo* insertion = new SymbolInfo(symbol_info_name, symbol_info_type, nullptr);
         _insert_at_the_end_of_chain(insertion, this->table, bucket);
 
-        cout << "Inserted in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
-            << bucket << ", " << printing_info::_chain_index << endl;
+        // cout << "Inserted in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
+            // << bucket << ", " << printing_info::_chain_index << endl;
 
         return true;
     } else {
-        cout << " " << *collision << " already exists in the current ScopeTable\n";
+        // cout << " " << *collision << " already exists in the current ScopeTable\n";
 
         return false;
     }
@@ -86,8 +86,8 @@ SymbolInfo* SymbolInfoHashTable::lookup(const string& symbol_info_name) {
     SymbolInfo* target = _find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
 
     if (target != nullptr) {
-        cout << "Found in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
-            << bucket << ", " << printing_info::_chain_index << endl;
+        // cout << "Found in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
+            // << bucket << ", " << printing_info::_chain_index << endl;
     }
 
     return target;
@@ -131,11 +131,11 @@ bool SymbolInfoHashTable::delete_symbolinfo(const string& symbol_info_name) {
     }
 
     if (is_successful_delete) {
-        cout << "Found in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position " << printing_info::_chain_index << endl;
-        cout << "Deleted Entry at " << bucket << ", " << printing_info::_chain_index << " in the current ScopeTable\n";
+        // cout << "Found in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position " << printing_info::_chain_index << endl;
+        // cout << "Deleted Entry at " << bucket << ", " << printing_info::_chain_index << " in the current ScopeTable\n";
     } else {
-        cout << "Not found\n";
-        cout << symbol_info_name << " is not found\n";
+        // cout << "Not found\n";
+        // cout << symbol_info_name << " is not found\n";
     }
 
     return is_successful_delete;
@@ -152,7 +152,16 @@ int SymbolInfoHashTable::hash(const string& symbol_info_name) {
 void _print_chain(SymbolInfo* const symbol_info_ptr) {
     SymbolInfo* current = symbol_info_ptr;
     while (current != nullptr) {
-        cout << *current << " ";
+        // cout << *current << " ";
+
+        current = current->next_syminfo_ptr;
+    }
+}
+
+void _print_chain(SymbolInfo* const symbol_info_ptr, ostream& ostrm) {
+    SymbolInfo* current = symbol_info_ptr;
+    while (current != nullptr) {
+        ostrm << *current << " ";
 
         current = current->next_syminfo_ptr;
     }
@@ -167,4 +176,18 @@ void SymbolInfoHashTable::print() {
         _print_chain(this->table[i]);
         cout << endl;
     }
+}
+
+ostream& operator<<(ostream& ostrm, SymbolInfoHashTable& hash_table) {
+    const string INDENT = "\t\t";
+    ostrm << endl;
+    for (int i = 0; i < hash_table.total_buckets; i++) {
+        if (hash_table.table[i] != nullptr) {
+            ostrm << INDENT;
+            ostrm << "Bucket " << i << " : ";
+            _print_chain(hash_table.table[i], ostrm);
+            ostrm << endl;
+        }
+    }
+    return ostrm;
 }

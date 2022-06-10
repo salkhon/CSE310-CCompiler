@@ -34,6 +34,8 @@ public:
 
     void print();
 
+    friend ostream& operator<<(ostream&, SymbolInfoHashTable&);
+
 private:
     int hash(const string& symbol_info_name);
 };

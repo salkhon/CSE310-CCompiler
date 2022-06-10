@@ -16,7 +16,7 @@ SymbolTable::~SymbolTable() {
         this->exit_scope();
     }
 
-    cout << "Destroying symbol table\n";
+    // cout << "Destroying symbol table\n";
 }
 
 /**
@@ -34,7 +34,7 @@ void SymbolTable::enter_scope() {
  */
 void SymbolTable::exit_scope() {
     if (this->current_scope_table == nullptr) {
-        cout << "No current scope\n";
+        // cout << "No current scope\n";
         return;
     }
 
@@ -61,7 +61,7 @@ void SymbolTable::exit_scope() {
  */
 bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_info_type) {
     if (this->current_scope_table == nullptr) {
-        cout << "No current scope\n";
+        // cout << "No current scope\n";
         return false;
     }
 
@@ -77,7 +77,7 @@ bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_in
  */
 bool SymbolTable::remove(const string& symbol_info_name) {
     if (this->current_scope_table == nullptr) {
-        cout << "No current scope\n";
+        // cout << "No current scope\n";
         return false;
     }
 
@@ -93,7 +93,7 @@ bool SymbolTable::remove(const string& symbol_info_name) {
  */
 SymbolInfo* SymbolTable::lookup(const string& symbol_info_name) {
     if (current_scope_table == nullptr) {
-        cout << "No current scope\n";
+        // cout << "No current scope\n";
         return nullptr;
     }
 
@@ -109,7 +109,7 @@ SymbolInfo* SymbolTable::lookup(const string& symbol_info_name) {
     }
 
     if (target == nullptr) {
-        cout << "Not found\n";
+        // cout << "Not found\n";
     }
 
     return target;
@@ -120,11 +120,22 @@ void SymbolTable::print_current_scope_table() {
 }
 
 void SymbolTable::print_all_scope_tables() {
-    // cout << "==========================Symbol Table==================================\n";
+    cout << "==========================Symbol Table==================================\n";
     for (auto rev_iter = this->scope_tables.rbegin(); rev_iter != this->scope_tables.rend(); rev_iter++) {
         ScopeTable* scope_table = *rev_iter;
 
         scope_table->print();
     }
-    // cout << "==========================------X-----==================================\n";
+    cout << "==========================------X-----==================================\n";
+}
+
+ostream& operator<<(ostream& ostrm, SymbolTable& symbol_table) {
+    ostrm << "==========================Symbol Table==================================\n";
+    for (auto rev_iter = symbol_table.scope_tables.rbegin(); rev_iter != symbol_table.scope_tables.rend(); rev_iter++) {
+        ScopeTable* scope_table = *rev_iter;
+
+        ostrm << *scope_table;
+    }
+    ostrm << "==========================------X------=================================\n";
+    return ostrm;
 }

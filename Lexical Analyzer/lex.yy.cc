@@ -543,6 +543,7 @@ static const flex_int16_t yy_chk[412] =
     #include <string>
     #include <fstream>
     #include <cctype>
+    #include "../Symbol Table Manager/include.cpp"
 
     using namespace std;
 
@@ -561,6 +562,10 @@ static const flex_int16_t yy_chk[412] =
     // write files
     ofstream token_file;
     ofstream log_file;
+
+    const int SYM_TABLE_BUCKETS = 10;
+
+    SymbolTable symbol_table(SYM_TABLE_BUCKETS);
     
     void write_token_and_log(string token, string lexeme) {
         token_file << token;
@@ -571,9 +576,9 @@ static const flex_int16_t yy_chk[412] =
         error_count++;
         log_file << "Line No. " << line_count << ": [ERROR] " << log << " Lexeme: " << lexeme << endl;
     }
-#line 575 "lex.yy.cc"
+#line 580 "lex.yy.cc"
 
-#line 577 "lex.yy.cc"
+#line 582 "lex.yy.cc"
 
 #define INITIAL 0
 #define BLOCK_COMMENT 1
@@ -710,10 +715,10 @@ YY_DECL
 		}
 
 	{
-#line 146 "lexer.l"
+#line 151 "lexer.l"
 
 
-#line 717 "lex.yy.cc"
+#line 722 "lex.yy.cc"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -772,14 +777,14 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 148 "lexer.l"
+#line 153 "lexer.l"
 {
     write_error_log("Unrecognized character.", YYText());
 }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 152 "lexer.l"
+#line 157 "lexer.l"
 {
     string token = string("<");
     for (char c : string(YYText())) {
@@ -791,30 +796,34 @@ YY_RULE_SETUP
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 162 "lexer.l"
+#line 167 "lexer.l"
 {
 
 }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 167 "lexer.l"
+#line 172 "lexer.l"
 {
     string token = string("<CONST_INT,") + string(YYText()) + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.insert(YYText(), "CONST_INT");
+    log_file << symbol_table;
 }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 172 "lexer.l"
+#line 179 "lexer.l"
 {
     string token = string("<CONST_FLOAT,") + string(YYText()) + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.insert(YYText(), "CONST_FLOAT");
+    log_file << symbol_table;
 }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 178 "lexer.l"
+#line 187 "lexer.l"
 {
     matched_char = -1; // used fo matching chars
     matched_literal = ""; // used for error lexeme
@@ -823,7 +832,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 184 "lexer.l"
+#line 193 "lexer.l"
 {
     if (matched_char == -1) {
         string lexeme = "''";
@@ -832,6 +841,8 @@ YY_RULE_SETUP
         string token = string("<CONST_CHAR,") + matched_char + string(">");
         string lexeme = string("'") + matched_literal + string("'");
         write_token_and_log(token, lexeme);
+        symbol_table.insert(string(1, matched_char), "CONST_CHAR");
+        log_file << symbol_table;
     }
 
     BEGIN INITIAL;
@@ -840,7 +851,7 @@ YY_RULE_SETUP
 case 8:
 /* rule 8 can match eol */
 YY_RULE_SETUP
-#line 197 "lexer.l"
+#line 208 "lexer.l"
 {
     string lexeme = string("'") + matched_literal;
     write_error_log("Unterminated character.", lexeme);
@@ -852,14 +863,14 @@ YY_RULE_SETUP
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 206 "lexer.l"
+#line 217 "lexer.l"
 {
     write_error_log("Not a valid character.", YYText());
 }
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 210 "lexer.l"
+#line 221 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = YYText()[0];
@@ -873,7 +884,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 221 "lexer.l"
+#line 232 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\a';
@@ -887,7 +898,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 232 "lexer.l"
+#line 243 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\b';
@@ -901,7 +912,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 243 "lexer.l"
+#line 254 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\f';
@@ -915,7 +926,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 254 "lexer.l"
+#line 265 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\n';
@@ -929,7 +940,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 265 "lexer.l"
+#line 276 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\r';
@@ -943,7 +954,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 276 "lexer.l"
+#line 287 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\t';
@@ -957,7 +968,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 287 "lexer.l"
+#line 298 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\v';
@@ -971,7 +982,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 298 "lexer.l"
+#line 309 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = '\0';
@@ -985,7 +996,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 309 "lexer.l"
+#line 320 "lexer.l"
 {
     if (matched_char == -1) {
         matched_char = YYText()[1];
@@ -999,7 +1010,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 320 "lexer.l"
+#line 331 "lexer.l"
 {
     string lexeme = string("'") + matched_literal + string("'");
     write_error_log("Multiple character constant error.", lexeme);
@@ -1010,7 +1021,7 @@ YY_RULE_SETUP
 case 21:
 /* rule 21 can match eol */
 YY_RULE_SETUP
-#line 327 "lexer.l"
+#line 338 "lexer.l"
 {
     string lexeme = string("'") + matched_literal;
     write_error_log("Unterminated character.", lexeme);
@@ -1022,14 +1033,14 @@ YY_RULE_SETUP
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 336 "lexer.l"
+#line 347 "lexer.l"
 {
     matched_literal += YYText();
 }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 341 "lexer.l"
+#line 352 "lexer.l"
 {
     string token = string("<ADDOP,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1037,7 +1048,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 346 "lexer.l"
+#line 357 "lexer.l"
 {
     string token = string("<MULOP,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1045,7 +1056,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 351 "lexer.l"
+#line 362 "lexer.l"
 {
     string token = string("<INCOP,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1053,7 +1064,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 356 "lexer.l"
+#line 367 "lexer.l"
 {
     string token = string("<RELOP,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1061,7 +1072,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 361 "lexer.l"
+#line 372 "lexer.l"
 {
     string token = string("<ASSIGNOP,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1069,7 +1080,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 366 "lexer.l"
+#line 377 "lexer.l"
 {
     string token = string("<LOGICOP,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1077,7 +1088,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 371 "lexer.l"
+#line 382 "lexer.l"
 {
     string token = string("<NOT,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1085,7 +1096,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 376 "lexer.l"
+#line 387 "lexer.l"
 {
     string token = string("<LPAREN,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1093,7 +1104,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 381 "lexer.l"
+#line 392 "lexer.l"
 {
     string token = string("<RPAREN,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1101,23 +1112,25 @@ YY_RULE_SETUP
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 386 "lexer.l"
+#line 397 "lexer.l"
 {
     string token = string("<LCURL,") + YYText() + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.enter_scope();
 }
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 391 "lexer.l"
+#line 403 "lexer.l"
 {
     string token = string("<RCURL,") + YYText() + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.exit_scope();
 }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 396 "lexer.l"
+#line 409 "lexer.l"
 {
     string token = string("<LTHIRD,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1125,7 +1138,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 401 "lexer.l"
+#line 414 "lexer.l"
 {
     string token = string("<RTHIRD,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1133,7 +1146,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 406 "lexer.l"
+#line 419 "lexer.l"
 {
     string token = string("<COMMA,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1141,7 +1154,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 411 "lexer.l"
+#line 424 "lexer.l"
 {
     string token = string("<SEMICOLON,") + YYText() + string(">");
     write_token_and_log(token, YYText());
@@ -1149,15 +1162,17 @@ YY_RULE_SETUP
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 417 "lexer.l"
+#line 430 "lexer.l"
 {
     string token = string("<ID,") + YYText() + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.insert(YYText(), "ID");
+    log_file << symbol_table;
 }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 423 "lexer.l"
+#line 438 "lexer.l"
 {
     BEGIN STRING;
     matched_str = "";
@@ -1167,7 +1182,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 430 "lexer.l"
+#line 445 "lexer.l"
 {
     string token = string("<STRING,") + matched_str + string(">");
     string lexeme = string("\"") + matched_literal + string("\"");
@@ -1181,7 +1196,7 @@ YY_RULE_SETUP
 case 41:
 /* rule 41 can match eol */
 YY_RULE_SETUP
-#line 440 "lexer.l"
+#line 455 "lexer.l"
 {
     pending_line_inc++;
     matched_literal += YYText();
@@ -1189,7 +1204,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 445 "lexer.l"
+#line 460 "lexer.l"
 {
     matched_str += '\n';
     matched_literal += YYText();
@@ -1197,7 +1212,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 450 "lexer.l"
+#line 465 "lexer.l"
 {
     matched_str += '\t';
     matched_literal += YYText();
@@ -1205,7 +1220,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 455 "lexer.l"
+#line 470 "lexer.l"
 {
     pending_line_inc++;
     matched_str += '\r';
@@ -1214,7 +1229,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 461 "lexer.l"
+#line 476 "lexer.l"
 {
     matched_str += '\b';
     matched_literal += YYText();
@@ -1222,7 +1237,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 466 "lexer.l"
+#line 481 "lexer.l"
 {
     matched_str += '\f';
     matched_literal += YYText();
@@ -1230,7 +1245,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 471 "lexer.l"
+#line 486 "lexer.l"
 {
     matched_str += YYText()[1];
     matched_literal += YYText();
@@ -1238,7 +1253,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 476 "lexer.l"
+#line 491 "lexer.l"
 {
     matched_str += YYText();
     matched_literal += YYText();
@@ -1247,7 +1262,7 @@ YY_RULE_SETUP
 case 49:
 /* rule 49 can match eol */
 YY_RULE_SETUP
-#line 481 "lexer.l"
+#line 496 "lexer.l"
 {
     line_count += pending_line_inc; // so error can point to actual line
     string lexeme = string("\"") + matched_literal;
@@ -1260,7 +1275,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
-#line 492 "lexer.l"
+#line 507 "lexer.l"
 {
     BEGIN LINE_COMMENT;
     matched_comment = "";
@@ -1270,7 +1285,7 @@ YY_RULE_SETUP
 case 51:
 /* rule 51 can match eol */
 YY_RULE_SETUP
-#line 498 "lexer.l"
+#line 513 "lexer.l"
 {
     string token = "<COMMENT," + matched_comment + string(">");
     string lexeme = "//" + matched_comment;
@@ -1285,7 +1300,7 @@ YY_RULE_SETUP
 case 52:
 /* rule 52 can match eol */
 YY_RULE_SETUP
-#line 509 "lexer.l"
+#line 524 "lexer.l"
 {
     pending_line_inc++;
     matched_comment += YYText();
@@ -1293,14 +1308,14 @@ YY_RULE_SETUP
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
-#line 514 "lexer.l"
+#line 529 "lexer.l"
 {
     matched_comment += YYText();
 }
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
-#line 519 "lexer.l"
+#line 534 "lexer.l"
 {
     BEGIN BLOCK_COMMENT;
     matched_comment = "";
@@ -1309,7 +1324,7 @@ YY_RULE_SETUP
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
-#line 525 "lexer.l"
+#line 540 "lexer.l"
 {
     string token = "<COMMENT," + matched_comment + string(">");
     string lexeme = string("\\**") + matched_comment + string("**\\");
@@ -1323,13 +1338,13 @@ YY_RULE_SETUP
 case 56:
 /* rule 56 can match eol */
 YY_RULE_SETUP
-#line 535 "lexer.l"
+#line 550 "lexer.l"
 {
     pending_line_inc++;
 }
 	YY_BREAK
 case YY_STATE_EOF(BLOCK_COMMENT):
-#line 539 "lexer.l"
+#line 554 "lexer.l"
 {
     string lexeme = string("\\**") + matched_comment;
     write_error_log("Unterminated comment.", lexeme);
@@ -1342,7 +1357,7 @@ case YY_STATE_EOF(BLOCK_COMMENT):
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
-#line 549 "lexer.l"
+#line 564 "lexer.l"
 {
     matched_comment += YYText();
 }
@@ -1350,38 +1365,38 @@ YY_RULE_SETUP
 case 58:
 /* rule 58 can match eol */
 YY_RULE_SETUP
-#line 554 "lexer.l"
+#line 569 "lexer.l"
 {
     line_count++;
 }
 	YY_BREAK
 case 59:
 YY_RULE_SETUP
-#line 558 "lexer.l"
+#line 573 "lexer.l"
 {
     write_error_log("Too many decimals.", YYText());    
 }
 	YY_BREAK
 case 60:
 YY_RULE_SETUP
-#line 562 "lexer.l"
+#line 577 "lexer.l"
 {
     write_error_log("Ill formed number.", YYText());
 }
 	YY_BREAK
 case 61:
 YY_RULE_SETUP
-#line 566 "lexer.l"
+#line 581 "lexer.l"
 {
     write_error_log("Invalid suffix on numberic constant or invalid prefix on identifier.", YYText());
 }
 	YY_BREAK
 case 62:
 YY_RULE_SETUP
-#line 571 "lexer.l"
+#line 586 "lexer.l"
 ECHO;
 	YY_BREAK
-#line 1385 "lex.yy.cc"
+#line 1400 "lex.yy.cc"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(LINE_COMMENT):
 case YY_STATE_EOF(CHAR):
@@ -2348,7 +2363,7 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 571 "lexer.l"
+#line 586 "lexer.l"
 
 
 

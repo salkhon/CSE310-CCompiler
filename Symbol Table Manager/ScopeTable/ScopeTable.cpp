@@ -8,12 +8,12 @@ ScopeTable::ScopeTable(const int total_buckets, ScopeTable* parent_scope_ptr)
     this->hashtable->enclosing_scope_table_ptr = this;
     this->set_parent_scope_ptr_with_id_currentid(parent_scope_ptr);
 
-    cout << "New ScopeTable with id " << this->id << " created\n";
+    // cout << "New ScopeTable with id " << this->id << " created\n";
 }
 
 ScopeTable::~ScopeTable() {
     delete this->hashtable;
-    cout << "ScopeTable with id " << this->id << " removed\n";
+    // cout << "ScopeTable with id " << this->id << " removed\n";
 }
 
 /**
@@ -95,4 +95,13 @@ void ScopeTable::print() {
     cout << INDENT;
     cout << "Scopetable # " << this->id << endl;
     this->hashtable->print();
+}
+
+ostream& operator<<(ostream& ostrm, ScopeTable& scope_table) {
+    const string INDENT = "\t";
+    ostrm << endl;
+    ostrm << INDENT;
+    ostrm << "Scopetable # " << scope_table.id << endl;
+    ostrm << *scope_table.hashtable;
+    return ostrm;
 }

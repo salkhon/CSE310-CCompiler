@@ -7,6 +7,7 @@
     #include <string>
     #include <fstream>
     #include <cctype>
+    #include "../Symbol Table Manager/include.cpp"
 
     using namespace std;
 
@@ -25,6 +26,10 @@
     // write files
     ofstream token_file;
     ofstream log_file;
+
+    const int SYM_TABLE_BUCKETS = 10;
+
+    SymbolTable symbol_table(SYM_TABLE_BUCKETS);
     
     void write_token_and_log(string token, string lexeme) {
         token_file << token;
@@ -98,7 +103,6 @@ DOUBLEQUOTES_LIT \\\"
 
 ESCAPED_CHARS_SPECIAL {ALERT}|{BACKSPACE}|{FORMFEED}|{NEWLINE}|{CR}|{TAB}|{VERTICALTAB}|{NULLCHAR}
 ESCAPED_CHARS_SPECIAL_EXCEPT_NL {ALERT}|{BACKSPACE}|{FORMFEED}|{TAB}|{VERTICALTAB}|{NULLCHAR}
-ESCAPED_CHARS_NORMAL {BACKSLASH}|{SINGLEQUOTES}|{DOUBLEQUOTES}
 
 SINGLECHAR [ -~]
 
@@ -109,7 +113,6 @@ DOUBLEFORWARDSLASH \/\/
 
 
 ESCAPED_LINE_BREAK {BACKSLASH}{NEWLINE}
-ESCAPED_TAB \\\t
 
 ADDOP [+-]
 MULOP [*/%]
@@ -167,11 +170,15 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {INTNUM} {
     string token = string("<CONST_INT,") + string(YYText()) + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.insert(YYText(), "CONST_INT");
+    log_file << symbol_table;
 }
 
 {FLOATNUM} {
     string token = string("<CONST_FLOAT,") + string(YYText()) + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.insert(YYText(), "CONST_FLOAT");
+    log_file << symbol_table;
 }
 
 
@@ -189,6 +196,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         string token = string("<CONST_CHAR,") + matched_char + string(">");
         string lexeme = string("'") + matched_literal + string("'");
         write_token_and_log(token, lexeme);
+        symbol_table.insert(string(1, matched_char), "CONST_CHAR");
+        log_file << symbol_table;
     }
 
     BEGIN INITIAL;
@@ -386,11 +395,13 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LCURL} {
     string token = string("<LCURL,") + YYText() + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.enter_scope();
 }
 
 {RCURL} {
     string token = string("<RCURL,") + YYText() + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.exit_scope();
 }
 
 {LTHIRD} {
@@ -417,6 +428,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {ID} {
     string token = string("<ID,") + YYText() + string(">");
     write_token_and_log(token, YYText());
+    symbol_table.insert(YYText(), "ID");
+    log_file << symbol_table;
 }
 
 
