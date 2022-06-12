@@ -35,9 +35,9 @@
         string token = string("<") + token_name + ", " + token_attr + ">";
 
         if (token_name == "STRING" || token_name == "CONST_CHAR") {
-            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s  found. --> %s\n", line_count, token_name.c_str(), lexeme.c_str(), token.c_str());
+            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s found. --> %s\n", line_count, token_name.c_str(), lexeme.c_str(), token.c_str());
         } else {
-            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s  found.\n", line_count, token_name.c_str(), lexeme.c_str());
+            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s found.\n", line_count, token_name.c_str(), lexeme.c_str());
         }
     }
 
@@ -62,7 +62,7 @@
 %x ERR_MULTIPLE_CHAR
 %x STRING
 
-UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>+=_\-\|\/\\;:'\",\.\? ]
+UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>+=_\-\|\\;:'\",\.\? ]
 
 IF_KW if
 FOR_KW for
@@ -119,7 +119,7 @@ ESCAPED_CHARS_SPECIAL_EXCEPT_NL {ALERT}|{BACKSPACE}|{FORMFEED}|{TAB}|{VERTICALTA
 
 SINGLECHAR [ -~]
 
-SINGLECHAR_LIT [ -~]{-}[\a\b\f\n\r\t\v\0\\]
+SINGLECHAR_LIT [ -~]{-}[\a\b\f\n\r\t\v\0]
 ANY_ESCAPED_CHAR_LIT \\.
 
 DOUBLEFORWARDSLASH \/\/ 
@@ -638,7 +638,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 {ERR_INVALID_SUFF_PREF} {
-    write_error_log("Invalid suffix on numberic constant or invalid prefix on identifier.", string(yytext));
+    write_error_log("Invalid suffix on numeric constant or invalid prefix on identifier.", string(yytext));
 }
 
 
