@@ -37,3 +37,6 @@
 output.txt
 test/
 lex.yy.cc
+lex.yy.c
+log.txt
+token.txt
