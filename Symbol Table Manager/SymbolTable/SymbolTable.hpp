@@ -15,8 +15,6 @@ class SymbolTable {
     vector<ScopeTable*> scope_tables;
     const int total_buckets;
 
-    ostream* ostrm;
-
 public:
     SymbolTable(int);
 

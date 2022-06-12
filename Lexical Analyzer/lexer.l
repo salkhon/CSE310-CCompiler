@@ -1,12 +1,12 @@
 %option noyywrap
-%option c++
 
 %{
     #include <iostream>
-    #include <string.h>
+    #include <sstream>
     #include <string>
-    #include <fstream>
     #include <cctype>
+    #include <stdlib.h>
+    #include <cstring>
     #include "../Symbol Table Manager/include.cpp"
 
     using namespace std;
@@ -24,21 +24,34 @@
     string matched_comment;
 
     // write files
-    ofstream token_file;
-    ofstream log_file;
+    FILE* token_file;
+    FILE* log_file;
 
     const int SYM_TABLE_BUCKETS = 10;
 
-    SymbolTable symbol_table(SYM_TABLE_BUCKETS, log_file);
+    SymbolTable symbol_table(SYM_TABLE_BUCKETS);
     
-    void write_token_and_log(string token, string lexeme) {
-        token_file << token;
-        log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
+    void write_log(string token_name, string token_attr, string lexeme) {
+        string token = string("<") + token_name + ", " + token_attr + ">";
+
+        if (token_name == "STRING" || token_name == "CONST_CHAR") {
+            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s  found. --> %s\n", line_count, token_name.c_str(), lexeme.c_str(), token.c_str());
+        } else {
+            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s  found.\n", line_count, token_name.c_str(), lexeme.c_str());
+        }
     }
+
+    void write_token_and_log(string token_name, string token_attr, string lexeme) {
+        string token = string("<") + token_name + ", " + token_attr + ">";
+
+        fprintf(token_file, "%s", token.c_str());
+        write_log(token_name, token_attr, lexeme);
+    }
+
 
     void write_error_log(string log, string lexeme = "") {
         error_count++;
-        log_file << "Line No. " << line_count << ": [ERROR] " << log << " Lexeme: " << lexeme << endl;
+        fprintf(log_file, "[ERROR]: Line no %d: %s Lexeme: %s\n", line_count, log.c_str(), lexeme.c_str());
     }
 %}
 
@@ -149,16 +162,15 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 %%
 
 {UNRECOGNIZED_CHARSET} {
-    write_error_log("Unrecognized character.", YYText());
+    write_error_log("Unrecognized character.", string(yytext));
 }
 
 {ALL_KW} {
-    string token = string("<");
-    for (char c : string(YYText())) {
-        token += toupper(c);
+    string token_name = "";
+    for (char c : string(yytext)) {
+        token_name += toupper(c);
     }
-    token += ">";
-    write_token_and_log(token, YYText());
+    write_token_and_log(token_name, "", string(yytext));
 }
 
 
@@ -168,18 +180,32 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 {INTNUM} {
-    string token = string("<CONST_INT,") + string(YYText()) + string(">");
-    write_token_and_log(token, YYText());
-    if (symbol_table.insert(YYText(), "CONST_INT")) {
-        log_file << symbol_table;
+    string token_name = "CONST_INT";
+    string token_attr = yytext;
+    string token = string("<") + token_name + ", " + token_attr + ">";
+    write_token_and_log(token_name, token_attr, string(yytext));
+
+    ostringstream osstrm;
+    if (symbol_table.insert(token_attr, "CONST_INT")) {
+        osstrm << symbol_table;
+        fprintf(log_file, "%s\n", osstrm.str().c_str());
+    } else {
+        fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
     }
 }
 
-{FLOATNUM} {
-    string token = string("<CONST_FLOAT,") + string(YYText()) + string(">");
-    write_token_and_log(token, YYText());
-    if (symbol_table.insert(YYText(), "CONST_FLOAT")) {
-        log_file << symbol_table;
+{FLOATNUM}|{EXPNUM} {
+    string token_name = "CONST_FLOAT";
+    string token_attr = yytext;
+    string token = string("<") + token_name + ", " + token_attr + ">";
+    write_token_and_log(token_name, token_attr, string(yytext));
+
+    ostringstream osstrm;
+    if (symbol_table.insert(token_attr, "CONST_FLOAT")) {
+        osstrm << symbol_table;
+        fprintf(log_file, "%s\n", osstrm.str().c_str());
+    } else {
+        fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
     }
 }
 
@@ -195,11 +221,18 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         string lexeme = "''";
         write_error_log("Empty character constant.", lexeme);
     } else {
-        string token = string("<CONST_CHAR,") + matched_char + string(">");
+        string token_name = "CONST_CHAR";
+        string token_attr = string(1, matched_char);
+        string token = string("<") + token_name + ", " + token_attr + ">";
         string lexeme = string("'") + matched_literal + string("'");
-        write_token_and_log(token, lexeme);
-        if (symbol_table.insert(string(1, matched_char), "CONST_CHAR")) {
-            log_file << symbol_table;
+        write_token_and_log(token_name, token_attr, lexeme);
+
+        ostringstream osstrm;
+        if (symbol_table.insert(token_attr, "CONST_CHAR")) {
+            osstrm << symbol_table;
+            fprintf(log_file, "%s\n", osstrm.str().c_str());
+        } else {
+            fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
         }
     }
 
@@ -216,15 +249,15 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <CHAR,ERR_MULTIPLE_CHAR>{ESCAPED_CHARS_SPECIAL_EXCEPT_NL} {
-    write_error_log("Not a valid character.", YYText());
+    write_error_log("Not a valid character.", string(yytext));
 }
 
 <CHAR>{SINGLECHAR_LIT} {
     if (matched_char == -1) {
-        matched_char = YYText()[0];
-        matched_literal += YYText(); // might need if error occurs
+        matched_char = string(yytext)[0];
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText(); 
+        matched_literal += string(yytext); 
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -233,9 +266,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{ALERT_LIT} {
     if (matched_char == -1) {
         matched_char = '\a';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -244,9 +277,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{BACKSPACE_LIT} {
     if (matched_char == -1) {
         matched_char = '\b';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -255,9 +288,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{FORMFEED_LIT} {
     if (matched_char == -1) {
         matched_char = '\f';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -266,9 +299,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{NEWLINE_LIT} {
     if (matched_char == -1) {
         matched_char = '\n';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -277,9 +310,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{CR_LIT} {
     if (matched_char == -1) {
         matched_char = '\r';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -288,9 +321,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{TAB_LIT} {
     if (matched_char == -1) {
         matched_char = '\t';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -299,9 +332,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{VERTICALTAB_LIT} {
     if (matched_char == -1) {
         matched_char = '\v';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -310,9 +343,9 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{NULLCHAR_LIT} {
     if (matched_char == -1) {
         matched_char = '\0';
-        matched_literal += YYText(); // might need if error occurs
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -320,10 +353,10 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <CHAR>{ANY_ESCAPED_CHAR_LIT} {
     if (matched_char == -1) {
-        matched_char = YYText()[1];
-        matched_literal += YYText(); // might need if error occurs
+        matched_char = string(yytext)[1];
+        matched_literal += string(yytext); // might need if error occurs
     } else {
-        matched_literal += YYText();
+        matched_literal += string(yytext);
         BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
@@ -346,93 +379,115 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <ERR_MULTIPLE_CHAR>[ -~]{-}[\n\'] {
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 
 {ADDOP} {
-    string token = string("<ADDOP,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "ADDOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {MULOP} {
-    string token = string("<MULOP,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "MULOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {INCOP} {
-    string token = string("<INCOP,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "INCOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {RELOP} {
-    string token = string("<RELOP,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "RELOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {ASSIGNOP} {
-    string token = string("<ASSIGNOP,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "ASSIGNOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {LOGICOP} {
-    string token = string("<LOGICOP,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "LOGICOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {NOT} {
-    string token = string("<NOT,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "NOT";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {LPAREN} {
-    string token = string("<LPAREN,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "LPAREN";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {RPAREN} {
-    string token = string("<RPAREN,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "RPAREN";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {LCURL} {
-    string token = string("<LCURL,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "LCURL";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
     symbol_table.enter_scope();
 }
 
 {RCURL} {
-    string token = string("<RCURL,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "RCURL";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
     symbol_table.exit_scope();
 }
 
 {LTHIRD} {
-    string token = string("<LTHIRD,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "LTHIRD";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {RTHIRD} {
-    string token = string("<RTHIRD,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "RTHIRD";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {COMMA} {
-    string token = string("<COMMA,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "COMMA";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {SEMICOLON} {
-    string token = string("<SEMICOLON,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
+    string token_name = "SEMICOLON";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 
 {ID} {
-    string token = string("<ID,") + YYText() + string(">");
-    write_token_and_log(token, YYText());
-    if (symbol_table.insert(YYText(), "ID")) {
-        log_file << symbol_table;
+    string token_name = "ID";
+    string token_attr = string(yytext);
+    string token = string("<") + token_name + ", " + token_attr + ">";
+    write_token_and_log(token_name, token_attr, string(yytext));
+    
+    ostringstream osstrm;
+    if (symbol_table.insert(token_attr, token_name)) {
+        osstrm << symbol_table;
+        fprintf(log_file, "%s\n", osstrm.str().c_str());
+    } else {
+        fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
     }
 }
 
@@ -445,9 +500,10 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <STRING>{DOUBLEQUOTES} {
-    string token = string("<STRING,") + matched_str + string(">");
-    string lexeme = string("\"") + matched_literal + string("\"");
-    write_token_and_log(token, lexeme);
+    string token_name = "STRING";
+    string token_attr = matched_str;
+    string lexeme = string("\"") + matched_literal + "\"";
+    write_token_and_log(token_name, token_attr, lexeme);
 
     line_count += pending_line_inc;
 
@@ -456,43 +512,43 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <STRING>{ESCAPED_LINE_BREAK} {
     pending_line_inc++;
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 <STRING>{NEWLINE_LIT} {
     matched_str += '\n';
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 <STRING>{TAB_LIT} {
     matched_str += '\t';
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 <STRING>{CR_LIT} {
     pending_line_inc++;
     matched_str += '\r';
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 <STRING>{BACKSPACE_LIT} {
     matched_str += '\b';
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 <STRING>{FORMFEED_LIT} {
     matched_str += '\f';
-    matched_literal += YYText();
+    matched_literal += string(yytext);
 }
 
 <STRING>{ANY_ESCAPED_CHAR_LIT} {
-    matched_str += YYText()[1];
-    matched_literal += YYText();
+    matched_str += string(yytext)[1];
+    matched_literal += string(yytext);
 }
 
 <STRING>{STRING_NORMAL_CHAR} {
-    matched_str += YYText();
-    matched_literal += YYText();
+    matched_str += string(yytext);
+    matched_literal += string(yytext);
 }
 
 <STRING>{NEWLINE} {
@@ -513,23 +569,23 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <LINE_COMMENT>{NEWLINE} {
-    string token = "<COMMENT," + matched_comment + string(">");
+    string token_name = "COMMENT";
+    string token_attr = matched_comment;
     string lexeme = "//" + matched_comment;
-    log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
+    write_log(token_name, token_attr, lexeme);
 
     line_count += pending_line_inc + 1;
-    pending_line_inc = 0;
 
     BEGIN INITIAL;
 }
 
 <LINE_COMMENT>{ESCAPED_LINE_BREAK} {
     pending_line_inc++;
-    matched_comment += YYText();
+    matched_comment += string(yytext);
 }
 
 <LINE_COMMENT>{LINE_COMMENT_NORMAL_CHAR} {
-    matched_comment += YYText();
+    matched_comment += string(yytext);
 }
 
 
@@ -540,9 +596,10 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <BLOCK_COMMENT>{BLOCK_COMMENT_END} {
-    string token = "<COMMENT," + matched_comment + string(">");
-    string lexeme = string("\\**") + matched_comment + string("**\\");
-    log_file << "Line No. " << line_count << ": Token " << token << " Lexeme " << lexeme << " found.\n";
+    string token_name = "COMMENT";
+    string token_attr = matched_comment;
+    string lexeme = "//" + matched_comment;
+    write_log(token_name, token_attr, lexeme);
 
     line_count += pending_line_inc;
 
@@ -564,7 +621,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <BLOCK_COMMENT>. {
-    matched_comment += YYText();
+    matched_comment += string(yytext);
 }
 
 
@@ -573,15 +630,15 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 {ERR_TOO_MANY_DECIMAL} {
-    write_error_log("Too many decimals.", YYText());    
+    write_error_log("Too many decimals.", string(yytext));    
 }
 
 {ERR_ILL_FORMED_NUM} {
-    write_error_log("Ill formed number.", YYText());
+    write_error_log("Ill formed number.", string(yytext));
 }
 
 {ERR_INVALID_SUFF_PREF} {
-    write_error_log("Invalid suffix on numberic constant or invalid prefix on identifier.", YYText());
+    write_error_log("Invalid suffix on numberic constant or invalid prefix on identifier.", string(yytext));
 }
 
 
@@ -594,24 +651,24 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    ifstream input_file(argv[1]);
-    token_file.open(argv[2]);
-    log_file.open(argv[3]);
+    FILE* input_file = fopen(argv[1], "r");
+    token_file = fopen(argv[2], "w");
+    log_file = fopen(argv[3], "w");
 
     if (!input_file || !token_file || !log_file) {
         cout << "ERROR: Could not open file\n";
         return 0;
     }
 
-    yyFlexLexer lexer(&input_file);
-    while (lexer.yylex()) {}
+    yyin = input_file;
+    yylex();
 
-    log_file << "Total lines: " << line_count << endl;
-    log_file << "Total errors: " << error_count; 
+    fprintf(log_file, "Total lines: %d\n", line_count);
+    fprintf(log_file, "Total errors: %d\n", error_count);
 
-    input_file.close();
-    token_file.close();
-    log_file.close();
+    fclose(input_file);
+    fclose(token_file);
+    fclose(log_file);
 
     return 0;
 }

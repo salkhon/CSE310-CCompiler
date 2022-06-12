@@ -9,11 +9,6 @@ SymbolTable::SymbolTable(int total_buckets)
     this->enter_scope();
 }
 
-SymbolTable::SymbolTable(int total_buckets, ostream& ostrm)
-    : SymbolTable(total_buckets) {
-    this->ostrm = &ostrm;
-}
-
 SymbolTable::~SymbolTable() {
     ScopeTable* current = this->current_scope_table;
 
@@ -70,13 +65,7 @@ bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_in
         return false;
     }
 
-    if (!this->current_scope_table->insert(symbol_info_name, symbol_info_type)) {
-        *this->ostrm << "Symbol <" << symbol_info_type << ", " << symbol_info_name << "> already exists on the symbol table.\n";
-        return false;
-    } else {
-        return true;
-    }
-
+    return this->current_scope_table->insert(symbol_info_name, symbol_info_type);
 }
 
 /**
