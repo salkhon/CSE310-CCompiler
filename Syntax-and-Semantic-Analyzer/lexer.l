@@ -7,8 +7,7 @@
     #include <cctype>
     #include <stdlib.h>
     #include <cstring>
-    #include "../Symbol Table Manager/include.hpp"
-    #include "parser.tab.h"
+    #include "parser.tab.c"
 
     using namespace std;
 
@@ -23,10 +22,6 @@
     char matched_char;
     string matched_str;
     string matched_comment;
-
-    // write files
-    FILE* token_file;
-    FILE* log_file;
 
     const int SYM_TABLE_BUCKETS = 10;
 
@@ -157,56 +152,56 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 {IF_KW} {
     string token_name = "IF";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return IF;
 }
 
 {FOR_KW} {
     string token_name = "FOR";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return FOR;
 }
 
 {INT_KW} {
     string token_name = "INT";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return INT; 
 }
 
 {FLOAT_KW} {
     string token_name = "FLOAT";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return FLOAT; 
 }
 
 {VOID_KW} {
     string token_name = "VOID";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return VOID;
 }
 
 {ELSE_KW} {
     string token_name = "ELSE";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return ELSE; 
 }
 
 {WHILE_KW} {
     string token_name = "WHILE";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return WHILE;
 }
 
 {RETURN_KW} {
     string token_name = "RETURN";
-    write_token_and_log(token_name, "", string(yytext));
+    write_token_and_log("", token_name, string(yytext));
 
     return RETURN;
 }
@@ -433,6 +428,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "RELOP";
     write_token_and_log(token_type, token_name, string(yytext));
 
+    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
+
     return RELOP;
 }
 
@@ -449,6 +446,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "LOGICOP";
     write_token_and_log(token_type, token_name, string(yytext));
 
+    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
+
     return LOGICOP;
 }
 
@@ -463,7 +462,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LPAREN} {
     string token_name = string(yytext);
     string token_type = "LPAREN";
-    write_token_and_log(token_type, token_attr, string(yytext));
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return LPAREN;
 }
@@ -479,7 +478,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LCURL} {
     string token_name = string(yytext);
     string token_type = "LCURL";
-    write_token_and_log(token_type`, token_name, string(yytext));
+    write_token_and_log(token_type, token_name, string(yytext));
     
     return LCURL;
 }
@@ -688,32 +687,3 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 %%
-
-
-int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        cout << "ERROR: lexer needs input, token, log file names as argument\n";
-        return 0;
-    }
-
-    FILE* input_file = fopen(argv[1], "r");
-    token_file = fopen(argv[2], "w");
-    log_file = fopen(argv[3], "w");
-
-    if (!input_file || !token_file || !log_file) {
-        cout << "ERROR: Could not open file\n";
-        return 0;
-    }
-
-    yyin = input_file;
-    yylex();
-
-    fprintf(log_file, "Total lines: %d\n", line_count);
-    fprintf(log_file, "Total errors: %d\n", error_count);
-
-    fclose(input_file);
-    fclose(token_file);
-    fclose(log_file);
-
-    return 0;
-}

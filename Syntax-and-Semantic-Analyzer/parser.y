@@ -9,15 +9,14 @@
     using namespace std;
 
     extern FILE* yyin;
-    FILE* input_file, log_file, error_file;
+    FILE* input_file,* log_file,* error_file;
 
     SymbolTable* symbol_table_ptr;
 
     int yyparse();
     int yylex();
 
-    int yyerror(char* str) {
-
+    void yyerror(char* str) {
     }
 %}
 
@@ -33,9 +32,6 @@
 %token<syminfo_ptr>
     ID CONST_INT CONST_FLOAT
 
-%start 
-    start
-
 %nterm<int_val>
     program unit var_declaration func_definition type_specifier parameter_list
     compound_statement statements declaration_list statement expression_statement expression
@@ -45,9 +41,11 @@
 %nterm<syminfo_ptr>
     func_declaration
 
+%left ADDOP 
+%left MULOP
 %right ASSIGNOP
 
- // ELSE has higher precedence than dummy token SHIFT_ELSE (telling to shift else, rather than reduce lone if)
+ // ELSE has higher precedence than dummy token SHIFT_ELSE (telling to shift ELSE, rather than reduce lone if)
 %nonassoc SHIFT_ELSE
 %nonassoc ELSE
 
@@ -55,7 +53,7 @@
 
 start: 
     program {
-
+        cout << "here" << endl;
     }
     ;
 
@@ -313,7 +311,6 @@ arguments:
     ;
 
 %%
-
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
