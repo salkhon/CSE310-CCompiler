@@ -16,7 +16,7 @@ public:
     // Not allocated or destroyed inside SymbolInfo class. 
     SymbolInfo* next_syminfo_ptr;
 
-    SymbolInfo(const string& name, const string& type, SymbolInfo* next_syminfo_ptr);
+    SymbolInfo(const string&, const string&, SymbolInfo*);
 
     ~SymbolInfo();
 

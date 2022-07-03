@@ -8,7 +8,9 @@
 
     using namespace std;
 
-    FILE* yyin;
+    extern FILE* yyin;
+    FILE* input_file, log_file, error_file;
+
     SymbolTable* symbol_table_ptr;
 
     int yyparse();
@@ -20,34 +22,34 @@
 %}
 
 %union {
-    long tkn;
-    struct tkn_syminfoptr {
-        long tkn;
-        SymbolInfo* syminfoptr;
-    }
+    int int_val;
+    SymbolInfo* syminfo_ptr;
 }
 
-%token<tkn> 
+%token<int_val>
     LPAREN RPAREN SEMICOLON COMMA LCURL RCURL INT FLOAT VOID LTHIRD RTHIRD FOR IF ELSE WHILE
-    PRINTLN RETURN ADDOP MULOP NOT INCOP DECOP
+    PRINTLN RETURN ASSIGNOP LOGICOP RELOP ADDOP MULOP NOT INCOP DECOP
 
-%token<tkn_syminfoptr>
-    ID CONST_INT ASSIGNOP LOGICOP RELOP CONST_FLOAT
-
-%nterm 
-    start program unit var_declaration func_declaration func_definition type_specifier parameter_list
-    compound_statement statements declaration_list statement var_declaration expression_statement expression
-    variable logic_expression rel_expression simple_expression term unary_expression factor argument_list
-    arguments
+%token<syminfo_ptr>
+    ID CONST_INT CONST_FLOAT
 
 %start 
     start
 
-%type<long> 
- 
-%right
+%nterm<int_val>
+    program unit var_declaration func_definition type_specifier parameter_list
+    compound_statement statements declaration_list statement expression_statement expression
+    variable logic_expression rel_expression simple_expression term unary_expression factor argument_list
+    arguments
 
-%left
+%nterm<syminfo_ptr>
+    func_declaration
+
+%right ASSIGNOP
+
+ // ELSE has higher precedence than dummy token SHIFT_ELSE (telling to shift else, rather than reduce lone if)
+%nonassoc SHIFT_ELSE
+%nonassoc ELSE
 
 %%
 
@@ -157,7 +159,7 @@ statements:
     statement {
 
     }
-    : statements statement {
+    | statements statement {
 
     }
     ;
@@ -175,9 +177,10 @@ statement:
     | FOR LPAREN expression_statement expression_statement expression RPAREN statement {
 
     }
-    | IF LPAREN expression RPAREN statement {
+    | IF LPAREN expression RPAREN statement 
+    %prec SHIFT_ELSE {
 
-    }
+    } 
     | IF LPAREN expression RPAREN statement ELSE statement {
 
     }
@@ -274,6 +277,9 @@ factor:
     | ID LPAREN argument_list RPAREN {
 
     }
+    | LPAREN expression RPAREN {
+
+    }
     | CONST_INT {
 
     }
@@ -310,6 +316,27 @@ arguments:
 
 
 int main(int argc, char* argv[]) {
- 
+    if (argc != 2) {
+        cout << "ERROR: Parser needs input file as argument\n";
+        return 1;
+    }
+
+    input_file = fopen(argv[1], "r");
+    log_file = fopen("log.txt", "w");
+    error_file = fopen("error.txt", "w");
+
+    if (!input_file || !log_file || !error_file) {
+        cout << "ERROR: Could not open file\n";
+        return 1;
+    }
+
+    yyin = input_file;
+
+    yyparse();
+
+    fclose(input_file);
+    fclose(log_file);
+    fclose(error_file);
+
     return 0;
 }
