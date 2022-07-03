@@ -34,9 +34,13 @@
 .vscode/
 *.pdf
 *.pptx
+input.txt
 output.txt
-test/
-lex.yy.cc
-lex.yy.c
 log.txt
 token.txt
+error.txt
+test/
+*.yy.c
+*.yy.cc
+log.txt
+*.tab.c
