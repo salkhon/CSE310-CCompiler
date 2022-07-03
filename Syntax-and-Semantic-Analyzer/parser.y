@@ -9,15 +9,13 @@
     using namespace std;
 
     extern FILE* yyin;
+    int yyparse();
+    int yylex();
+    void yyerror(char* str) {}
+
     FILE* input_file,* log_file,* error_file;
 
     SymbolTable* symbol_table_ptr;
-
-    int yyparse();
-    int yylex();
-
-    void yyerror(char* str) {
-    }
 %}
 
 %union {
@@ -27,10 +25,10 @@
 
 %token<int_val>
     LPAREN RPAREN SEMICOLON COMMA LCURL RCURL INT FLOAT VOID LTHIRD RTHIRD FOR IF ELSE WHILE
-    PRINTLN RETURN ASSIGNOP LOGICOP RELOP ADDOP MULOP NOT INCOP DECOP
+    PRINTLN RETURN ASSIGNOP NOT INCOP DECOP
 
 %token<syminfo_ptr>
-    ID CONST_INT CONST_FLOAT
+    ID CONST_INT CONST_FLOAT LOGICOP RELOP ADDOP MULOP
 
 %nterm<int_val>
     program unit var_declaration func_definition type_specifier parameter_list
@@ -41,9 +39,13 @@
 %nterm<syminfo_ptr>
     func_declaration
 
+%right COMMA
+%right ASSIGNOP
+
+%left RELOP
 %left ADDOP 
 %left MULOP
-%right ASSIGNOP
+%left INCOP DECOP LPAREN RPAREN LTHIRD RTHIRD 
 
  // ELSE has higher precedence than dummy token SHIFT_ELSE (telling to shift ELSE, rather than reduce lone if)
 %nonassoc SHIFT_ELSE
@@ -53,7 +55,7 @@
 
 start: 
     program {
-        cout << "here" << endl;
+        YYACCEPT;
     }
     ;
 
@@ -80,19 +82,19 @@ unit:
 
 func_declaration: 
     type_specifier ID LPAREN parameter_list RPAREN SEMICOLON {
-
+        cout << "func decl with params\n";
     }
     | type_specifier ID LPAREN RPAREN SEMICOLON {
-
+        cout << "func decl no params\n";
     }
     ;
 
 func_definition:
     type_specifier ID LPAREN parameter_list RPAREN compound_statement {
-
+        cout << "func def with params\n";
     }
     | type_specifier ID LPAREN RPAREN compound_statement {
-
+        cout << "func def no param\n";
     }
     ;
 
@@ -113,10 +115,10 @@ parameter_list:
 
 compound_statement:
     LCURL statements RCURL {
-
+        cout << "block\n";
     }
     | LCURL RCURL {
-
+        cout << "empty block\n";
     }
     ;
 
@@ -128,13 +130,13 @@ var_declaration:
 
 type_specifier:
     INT {
-
+        cout << "int\n";
     }
     | FLOAT {
 
     }
     | VOID {
-
+        cout << "void\n";
     }
     ;
 
@@ -155,10 +157,10 @@ declaration_list:
 
 statements:
     statement {
-
+        cout << "statement\n";
     }
     | statements statement {
-
+        cout << "statements-statement\n";
     }
     ;
 
@@ -296,7 +298,7 @@ argument_list:
     arguments {
 
     }
-    | {
+    | %empty {
 
     }
     ;

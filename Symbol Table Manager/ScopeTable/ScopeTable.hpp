@@ -4,6 +4,8 @@
 
 using namespace std;
 
+class SymbolInfoHashTable;
+
 /**
  * @brief Wrapper class on the Hashtable that holds all the tokens for the current scope.
  * Holds the depth of this scope table in comparison to all previous scope tables.

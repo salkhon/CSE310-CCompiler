@@ -1,4 +1,5 @@
 %option noyywrap
+%option noinput
 
 %{
     #include <iostream>
@@ -7,9 +8,12 @@
     #include <cctype>
     #include <stdlib.h>
     #include <cstring>
-    #include "parser.tab.c"
+    #include "../Symbol Table Manager/include.hpp"
+    #include "parser.tab.h"
 
     using namespace std;
+
+    void yyerror(char*);
 
     // counts
     int line_count = 1;
@@ -25,14 +29,11 @@
 
     const int SYM_TABLE_BUCKETS = 10;
 
-    SymbolTable symbol_table(SYM_TABLE_BUCKETS);
-    
     void write_log(string token_name, string token_attr, string lexeme) {
     }
 
     void write_token_and_log(string token_name, string token_attr, string lexeme) {
     }
-
 
     void write_error_log(string log, string lexeme = "") {
         error_count++;
@@ -113,7 +114,8 @@ ESCAPED_LINE_BREAK {BACKSLASH}{NEWLINE}
 
 ADDOP [+-]
 MULOP [*/%]
-INCOP "++"|"--"
+INCOP "++"
+DECOP "--"
 RELOP <|<=|>|>=|==|!=
 ASSIGNOP =
 LOGICOP &&|"||"
@@ -274,7 +276,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext); 
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -285,7 +286,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -296,7 +296,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -307,7 +306,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -318,7 +316,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -329,7 +326,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -340,7 +336,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -351,7 +346,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -362,7 +356,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -373,7 +366,6 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
-        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -404,6 +396,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_type = "ADDOP";
     write_token_and_log(token_type, token_name, string(yytext));
 
+    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
+
     return ADDOP;
 }
 
@@ -411,6 +405,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string token_name = string(yytext);
     string token_type = "MULOP";
     write_token_and_log(token_type, token_name, string(yytext));
+
+    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
 
     return MULOP;
 }
@@ -421,6 +417,14 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     write_token_and_log(token_type, token_name, string(yytext));
 
     return INCOP;
+}
+
+{DECOP} {
+    string token_name = string(yytext);
+    string token_type = "DECOP";
+    write_token_and_log(token_type, token_name, string(yytext));
+
+    return DECOP;
 }
 
 {RELOP} {

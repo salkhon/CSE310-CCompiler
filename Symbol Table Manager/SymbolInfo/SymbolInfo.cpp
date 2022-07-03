@@ -2,7 +2,7 @@
 
 using namespace std;
 
-SymbolInfo::SymbolInfo(const string& name, const string& type, SymbolInfo* next_syminfo_ptr=nullptr)
+SymbolInfo::SymbolInfo(const string& name, const string& type, SymbolInfo* next_syminfo_ptr)
     : name(name), type(type), next_syminfo_ptr(next_syminfo_ptr) {}
 
 SymbolInfo::~SymbolInfo() {}
