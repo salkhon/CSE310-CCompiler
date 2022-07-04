@@ -128,6 +128,7 @@ LTHIRD "["
 RTHIRD "]"
 COMMA ","
 SEMICOLON ";"
+PRINTLN "printf"
 
 ALPHABET [a-zA-Z]
 ALPHABETS {ALPHABET}+
@@ -525,6 +526,14 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     write_token_and_log(token_type, token_name, string(yytext));
 
     return SEMICOLON;
+}
+
+{PRINTLN} {
+    string token_name = string(yytext);
+    string token_type = "PRINTLN";
+    write_token_and_log(token_type, token_name, string(yytext));
+
+    return PRINTLN;
 }
 
 
