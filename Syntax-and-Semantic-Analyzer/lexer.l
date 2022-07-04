@@ -47,7 +47,7 @@
 %x ERR_MULTIPLE_CHAR
 %x STRING
 
-UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>+=_\-\|\\;:'\",\.\? ]
+UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>\+=_\-\|\\;:'\",\.\? ]
 
 IF_KW if
 FOR_KW for
@@ -72,7 +72,7 @@ WHITESPACE [ \t]*
 
 DIGIT [0-9]
 DIGITS {DIGIT}+
-INTNUM [-]?{DIGITS}
+INTNUM {DIGITS}
 FLOATNUM {INTNUM}?\.{DIGITS}
 EXPNUM ({INTNUM}|{FLOATNUM})[eE]{INTNUM}
 
@@ -102,8 +102,6 @@ DOUBLEQUOTES_LIT \\\"
 ESCAPED_CHARS_SPECIAL {ALERT}|{BACKSPACE}|{FORMFEED}|{NEWLINE}|{CR}|{TAB}|{VERTICALTAB}|{NULLCHAR}
 ESCAPED_CHARS_SPECIAL_EXCEPT_NL {ALERT}|{BACKSPACE}|{FORMFEED}|{TAB}|{VERTICALTAB}|{NULLCHAR}
 
-SINGLECHAR [ -~]
-
 SINGLECHAR_LIT [ -~]{-}[\a\b\f\n\r\t\v\0]
 ANY_ESCAPED_CHAR_LIT \\.
 
@@ -112,8 +110,8 @@ DOUBLEFORWARDSLASH \/\/
 
 ESCAPED_LINE_BREAK {BACKSLASH}{NEWLINE}
 
-ADDOP [+-]
-MULOP [*/%]
+ADDOP "+"|"-"
+MULOP [\*\/%]
 INCOP "++"
 DECOP "--"
 RELOP <|<=|>|>=|==|!=
@@ -154,57 +152,65 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 {IF_KW} {
-    string token_name = "IF";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "IF";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return IF;
 }
 
 {FOR_KW} {
-    string token_name = "FOR";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "FOR";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return FOR;
 }
 
 {INT_KW} {
-    string token_name = "INT";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "INT";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return INT; 
 }
 
 {FLOAT_KW} {
-    string token_name = "FLOAT";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "FLOAT";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return FLOAT; 
 }
 
 {VOID_KW} {
-    string token_name = "VOID";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "VOID";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return VOID;
 }
 
 {ELSE_KW} {
-    string token_name = "ELSE";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "ELSE";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return ELSE; 
 }
 
 {WHILE_KW} {
-    string token_name = "WHILE";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "WHILE";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return WHILE;
 }
 
 {RETURN_KW} {
-    string token_name = "RETURN";
-    write_token_and_log("", token_name, string(yytext));
+    string token_name = yytext;
+    string token_type = "RETURN";
+    write_token_and_log(token_type, token_name, string(yytext));
 
     return RETURN;
 }

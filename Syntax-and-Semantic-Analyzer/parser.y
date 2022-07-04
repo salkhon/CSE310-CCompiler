@@ -38,11 +38,13 @@
 
 %right COMMA
 %right ASSIGNOP
-
+%left LOGICOP
 %left RELOP
 %left ADDOP 
 %left MULOP
+%right NOT UNARY  // dummy token to reduce unary ADDOP before arithmetic ADDOP
 %left INCOP DECOP LPAREN RPAREN LTHIRD RTHIRD 
+ // each rule gets its precedence from the last terminal symbol mentioned in the components by default. 
 
  // ELSE has higher precedence than dummy token SHIFT_ELSE (telling to shift ELSE, rather than reduce lone if)
 %nonassoc SHIFT_ELSE
@@ -52,7 +54,7 @@
 
 start: 
     program {
-        cout << "here\n";
+        cout << "FINISHED\n";
         $$ = new SymbolInfo($1->get_name_str(), "start");
         YYACCEPT;
     }
@@ -60,10 +62,14 @@ start:
 
 program: 
     program unit {
-        $$ = new SymbolInfo($1->get_name_str(), "program");
+        cout << "in unit: ";
+        $$ = new SymbolInfo($1->get_name_str() + " " + $2->get_name_str(), "program");
+        cout << $$->get_name_str() << endl;
     }   
     | unit {
+        cout << "in single unit: ";
         $$ = new SymbolInfo($1->get_name_str(), "program");
+        cout << $$->get_name_str() << endl;
     }
     ;
 
@@ -97,6 +103,7 @@ func_definition:
     | type_specifier ID LPAREN RPAREN compound_statement {
         $$ = new SymbolInfo($1->get_name_str() + " " + $2->get_name_str() + "() " + 
             $5->get_name_str(), "func_definition");
+        cout << "no param func def: " << $$->get_name_str() << endl;
     }
     ;
 
@@ -119,6 +126,7 @@ parameter_list:
 compound_statement:
     LCURL statements RCURL {
         $$ = new SymbolInfo("{ " + $2->get_name_str() + " }", "compound_statement");
+        cout << "compound stmt: " << $$->get_name_str() << endl;
     }
     | LCURL RCURL {
         $$ = new SymbolInfo("{}", "compound_statement");
@@ -162,9 +170,11 @@ declaration_list:
 statements:
     statement {
         $$ = new SymbolInfo($1->get_name_str(), "statements");
+        cout << "single statement: " << $$->get_name_str() << endl;
     }
     | statements statement {
         $$ = new SymbolInfo($1->get_name_str() + " " + $2->get_name_str(), "statements");
+        cout << "multiple stmt: " << $$->get_name_str() << endl;
     }
     ;
 
@@ -174,6 +184,7 @@ statement:
     }
     | expression_statement {
         $$ = new SymbolInfo($1->get_name_str(), "statement");
+        cout << "expr stmt: " << $$->get_name_str() << endl;
     }
     | compound_statement {
         $$ = new SymbolInfo($1->get_name_str(), "statement");
@@ -225,6 +236,7 @@ expression:
     }
     | variable ASSIGNOP logic_expression {
         $$ = new SymbolInfo($1->get_name_str() + " = " + $3->get_name_str(), "expression");
+        cout << "assign: " << $$->get_name_str() << endl;
     }
     ;
 
@@ -255,6 +267,7 @@ simple_expression:
     | simple_expression ADDOP term {
         $$ = new SymbolInfo($1->get_name_str() + " " + $2->get_name_str() + " " + 
             $3->get_name_str(), "simple_expression");
+        cout << "simple expr: " << $$->get_name_str() << endl;
     }
     ;
 
@@ -268,8 +281,9 @@ term:
     ;
 
 unary_expression:
-    ADDOP unary_expression {
-        $$ = new SymbolInfo("+" + $1->get_name_str(), "unary_expression");
+    ADDOP unary_expression 
+    %prec UNARY {
+        $$ = new SymbolInfo($1->get_name_str() + $2->get_name_str(), "unary_expression");
     }
     | NOT unary_expression {
         $$ = new SymbolInfo("!" + $2->get_name_str(), "unary_expression");
