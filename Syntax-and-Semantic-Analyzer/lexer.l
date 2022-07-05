@@ -16,6 +16,10 @@
 
     void yyerror(char*);
 
+    extern FILE* log_file;
+    extern FILE* error_file;
+    extern SymbolTable symbol_table;
+
     // counts
     int line_count = 1;
     int pending_line_inc = 0;
@@ -28,17 +32,10 @@
     string matched_str;
     string matched_comment;
 
-    const int SYM_TABLE_BUCKETS = 10;
-
-    void write_log(string token_name, string token_attr, string lexeme) {
-    }
-
-    void write_token_and_log(string token_name, string token_attr, string lexeme) {
-    }
-
-    void write_error_log(string log, string lexeme = "") {
-        error_count++;
-    }
+    void write_log(string, string, string);
+    void write_token_and_log(string, string, string);
+    void write_error_log(string, string lexeme = "");
+    void write_symtable_in_log(SymbolTable& symtable);
 %}
 
 
@@ -707,3 +704,12 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 %%
+
+
+void write_log(string token_name, string token_attr, string lexeme) {}
+
+void write_token_and_log(string token_name, string token_attr, string lexeme) {}
+
+void write_error_log(string log, string lexeme) {
+    error_count++;
+}
