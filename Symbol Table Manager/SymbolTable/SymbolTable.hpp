@@ -28,6 +28,8 @@ public:
 
     bool insert(const string&, const string&);
 
+    bool insert(const string&, const string&, vector<string>&);
+
     bool remove(const string&);
 
     SymbolInfo* lookup(const string&);

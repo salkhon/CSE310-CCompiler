@@ -26,7 +26,7 @@ public:
 
     int get_num_buckets();
 
-    bool insert(const string& symbol_info_name, const string& symbol_info_type);
+    bool insert(const string& symbol_info_name, const string& symbol_info_type, vector<string> = {});
 
     SymbolInfo* lookup(const string& symbol_info_name);
 

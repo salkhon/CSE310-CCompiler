@@ -60,23 +60,20 @@ void _insert_at_the_end_of_chain(SymbolInfo* const insertion, vector<SymbolInfo*
     printing_info::_chain_index = idx;
 }
 
-bool SymbolInfoHashTable::insert(const string& symbol_info_name, const string& symbol_info_type) {
+bool SymbolInfoHashTable::insert(const string& symbol_info_name, const string& symbol_info_type, vector<string> func_param_types) {
     int bucket = this->hash(symbol_info_name);
 
     SymbolInfo* collision = _find_syminfo_name_in_chain(symbol_info_name, this->table[bucket]);
 
     if (collision == nullptr) {
         // no collision
-        SymbolInfo* insertion = new SymbolInfo(symbol_info_name, symbol_info_type, nullptr);
+        SymbolInfo* insertion = new SymbolInfo(symbol_info_name, symbol_info_type, func_param_types);
         _insert_at_the_end_of_chain(insertion, this->table, bucket);
-
         // cout << "Inserted in ScopeTable# " << this->enclosing_scope_table_ptr->get_id() << " at position "
             // << bucket << ", " << printing_info::_chain_index << endl;
-
         return true;
     } else {
         // cout << " " << *collision << " already exists in the current ScopeTable\n";
-
         return false;
     }
 }

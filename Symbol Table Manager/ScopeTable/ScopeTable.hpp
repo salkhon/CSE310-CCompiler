@@ -22,7 +22,7 @@ class ScopeTable {
     int num_deleted_children;
 
 public:
-    ScopeTable(int total_buckets, ScopeTable*);
+    ScopeTable(int, ScopeTable*);
 
     ~ScopeTable();
 
@@ -38,11 +38,13 @@ public:
 
     int get_current_id();
 
-    bool insert(const string& symbol_info_name, const string& symbol_info_type);
+    bool insert(const string&, const string&);
 
-    SymbolInfo* lookup(const string& symbol_info_name);
+    bool insert(const string&, const string&, vector<string>&);
 
-    bool delete_symbolinfo(const string& symbol_info_name);
+    SymbolInfo* lookup(const string&);
+
+    bool delete_symbolinfo(const string&);
 
     void print();
 

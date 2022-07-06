@@ -64,8 +64,26 @@ bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_in
         // cout << "No current scope\n";
         return false;
     }
-
+    
     return this->current_scope_table->insert(symbol_info_name, symbol_info_type);
+}
+
+/**
+ * @brief Inserts the provided token into the current scope table.
+ *
+ * @param symbol_info_name Token name
+ * @param symbol_info_type Token type
+ * @param func_param_types List of function return type followed by parameter types (Optional)
+ * @return true When insertion is successful
+ * @return false When insertion is not successful (collision or no scope table)
+ */
+bool SymbolTable::insert(const string& symbol_info_name, const string& symbol_info_type, vector<string>& func_param_types) {
+    if (this->current_scope_table == nullptr) {
+        // cout << "No current scope\n";
+        return false;
+    }
+
+    return this->current_scope_table->insert(symbol_info_name, symbol_info_type, func_param_types);
 }
 
 /**

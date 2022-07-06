@@ -29,6 +29,19 @@ bool ScopeTable::insert(const string& symbol_info_name, const string& symbol_inf
 }
 
 /**
+ * @brief Allocates symbol info with provided args. Hashes them into the chain of the proper bucket.
+ *
+ * @param symbol_info_name Name of the token to be allocated
+ * @param symbol_info_type Type of the token to be allocated
+ * @param func_param_types List of function return type followed by parameter types (Optional)
+ * @return true When insertion is successful.
+ * @return false When insertion is not successful. (collision)
+ */
+bool ScopeTable::insert(const string& symbol_info_name, const string& symbol_info_type, vector<string>& func_param_types) {
+    return this->hashtable->insert(symbol_info_name, symbol_info_type, func_param_types);
+}
+
+/**
  * @brief Looks up the token by name.
  *
  * @param symbol_info_name Name of token to search.
