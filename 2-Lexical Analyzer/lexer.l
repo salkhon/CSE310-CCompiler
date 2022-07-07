@@ -1,6 +1,4 @@
 %option noyywrap
-%option noinput
-%option nounput
 
 %{
     #include <iostream>
@@ -9,16 +7,9 @@
     #include <cctype>
     #include <stdlib.h>
     #include <cstring>
-    #include "../Symbol Table Manager/include.hpp"
-    #include "parser.tab.h"
+    #include "./symbol-table/include.cpp"
 
     using namespace std;
-
-    void yyerror(char*);
-
-    extern FILE* log_file;
-    extern FILE* error_file;
-    extern SymbolTable symbol_table;
 
     // counts
     int line_count = 1;
@@ -32,10 +23,36 @@
     string matched_str;
     string matched_comment;
 
-    void write_log(string, string, string);
-    void write_token_and_log(string, string, string);
-    void write_error_log(string, string lexeme = "");
-    void write_symtable_in_log(SymbolTable& symtable);
+    // write files
+    FILE* token_file;
+    FILE* log_file;
+
+    const int SYM_TABLE_BUCKETS = 10;
+
+    SymbolTable symbol_table(SYM_TABLE_BUCKETS);
+    
+    void write_log(string token_name, string token_attr, string lexeme) {
+        string token = string("<") + token_name + ", " + token_attr + ">";
+
+        if (token_name == "STRING" || token_name == "CONST_CHAR") {
+            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s found. --> %s\n", line_count, token_name.c_str(), lexeme.c_str(), token.c_str());
+        } else {
+            fprintf(log_file, "Line no %d: Token <%s> Lexeme %s found.\n", line_count, token_name.c_str(), lexeme.c_str());
+        }
+    }
+
+    void write_token_and_log(string token_name, string token_attr, string lexeme) {
+        string token = string("<") + token_name + ", " + token_attr + ">";
+
+        fprintf(token_file, "%s", token.c_str());
+        write_log(token_name, token_attr, lexeme);
+    }
+
+
+    void write_error_log(string log, string lexeme = "") {
+        error_count++;
+        fprintf(log_file, "[ERROR]: Line no %d: %s Lexeme: %s\n", line_count, log.c_str(), lexeme.c_str());
+    }
 %}
 
 
@@ -45,7 +62,7 @@
 %x ERR_MULTIPLE_CHAR
 %x STRING
 
-UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>\+=_\-\|\\;:'\",\.\? ]
+UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>+=_\-\|\\;:'\",\.\? ]
 
 IF_KW if
 FOR_KW for
@@ -70,7 +87,7 @@ WHITESPACE [ \t]*
 
 DIGIT [0-9]
 DIGITS {DIGIT}+
-INTNUM {DIGITS}
+INTNUM [-]?{DIGITS}
 FLOATNUM {INTNUM}?\.{DIGITS}
 EXPNUM ({INTNUM}|{FLOATNUM})[eE]{INTNUM}
 
@@ -100,6 +117,8 @@ DOUBLEQUOTES_LIT \\\"
 ESCAPED_CHARS_SPECIAL {ALERT}|{BACKSPACE}|{FORMFEED}|{NEWLINE}|{CR}|{TAB}|{VERTICALTAB}|{NULLCHAR}
 ESCAPED_CHARS_SPECIAL_EXCEPT_NL {ALERT}|{BACKSPACE}|{FORMFEED}|{TAB}|{VERTICALTAB}|{NULLCHAR}
 
+SINGLECHAR [ -~]
+
 SINGLECHAR_LIT [ -~]{-}[\a\b\f\n\r\t\v\0]
 ANY_ESCAPED_CHAR_LIT \\.
 
@@ -108,10 +127,9 @@ DOUBLEFORWARDSLASH \/\/
 
 ESCAPED_LINE_BREAK {BACKSLASH}{NEWLINE}
 
-ADDOP "+"|"-"
-MULOP [\*\/%]
-INCOP "++"
-DECOP "--"
+ADDOP [+-]
+MULOP [*/%]
+INCOP "++"|"--"
 RELOP <|<=|>|>=|==|!=
 ASSIGNOP =
 LOGICOP &&|"||"
@@ -124,7 +142,6 @@ LTHIRD "["
 RTHIRD "]"
 COMMA ","
 SEMICOLON ";"
-PRINTLN "printf"
 
 ALPHABET [a-zA-Z]
 ALPHABETS {ALPHABET}+
@@ -148,69 +165,12 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     write_error_log("Unrecognized character.", string(yytext));
 }
 
-
-{IF_KW} {
-    string token_name = yytext;
-    string token_type = "IF";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return IF;
-}
-
-{FOR_KW} {
-    string token_name = yytext;
-    string token_type = "FOR";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return FOR;
-}
-
-{INT_KW} {
-    string token_name = yytext;
-    string token_type = "INT";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return INT; 
-}
-
-{FLOAT_KW} {
-    string token_name = yytext;
-    string token_type = "FLOAT";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return FLOAT; 
-}
-
-{VOID_KW} {
-    string token_name = yytext;
-    string token_type = "VOID";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return VOID;
-}
-
-{ELSE_KW} {
-    string token_name = yytext;
-    string token_type = "ELSE";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return ELSE; 
-}
-
-{WHILE_KW} {
-    string token_name = yytext;
-    string token_type = "WHILE";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return WHILE;
-}
-
-{RETURN_KW} {
-    string token_name = yytext;
-    string token_type = "RETURN";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return RETURN;
+{ALL_KW} {
+    string token_name = "";
+    for (char c : string(yytext)) {
+        token_name += toupper(c);
+    }
+    write_token_and_log(token_name, "", string(yytext));
 }
 
 
@@ -220,26 +180,35 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 {INTNUM} {
-    string token_name = yytext;
-    string token_type = "CONST_INT";
-    string token = string("<") + token_type + ", " + token_name + ">";
-    write_token_and_log(token_type, token_name, string(yytext));
+    string token_name = "CONST_INT";
+    string token_attr = yytext;
+    string token = string("<") + token_name + ", " + token_attr + ">";
+    write_token_and_log(token_name, token_attr, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return CONST_INT;
+    ostringstream osstrm;
+    if (symbol_table.insert(token_attr, "CONST_INT")) {
+        osstrm << symbol_table;
+        fprintf(log_file, "%s\n", osstrm.str().c_str());
+    } else {
+        fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
+    }
 }
 
 {FLOATNUM}|{EXPNUM} {
-    string token_name = yytext;
-    string token_type = "CONST_FLOAT";
-    string token = string("<") + token_type + ", " + token_name + ">";
-    write_token_and_log(token_type, token_name, string(yytext));
+    string token_name = "CONST_FLOAT";
+    string token_attr = yytext;
+    string token = string("<") + token_name + ", " + token_attr + ">";
+    write_token_and_log(token_name, token_attr, string(yytext));
 
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return CONST_FLOAT;
+    ostringstream osstrm;
+    if (symbol_table.insert(token_attr, "CONST_FLOAT")) {
+        osstrm << symbol_table;
+        fprintf(log_file, "%s\n", osstrm.str().c_str());
+    } else {
+        fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
+    }
 }
+
 
 {SINGLEQUOTES} {
     matched_char = -1; // used fo matching chars
@@ -252,11 +221,19 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         string lexeme = "''";
         write_error_log("Empty character constant.", lexeme);
     } else {
-        string token_name = string(1, matched_char);
-        string token_type = "CONST_CHAR";
-        string token = string("<") + token_type + ", " + token_name + ">";
+        string token_name = "CONST_CHAR";
+        string token_attr = string(1, matched_char);
+        string token = string("<") + token_name + ", " + token_attr + ">";
         string lexeme = string("'") + matched_literal + string("'");
-        write_token_and_log(token_type, token_name, lexeme);
+        write_token_and_log(token_name, token_attr, lexeme);
+
+        ostringstream osstrm;
+        if (symbol_table.insert(token_attr, "CONST_CHAR")) {
+            osstrm << symbol_table;
+            fprintf(log_file, "%s\n", osstrm.str().c_str());
+        } else {
+            fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
+        }
     }
 
     BEGIN INITIAL;
@@ -281,6 +258,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext); 
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -291,6 +269,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -301,6 +280,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -311,6 +291,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -321,6 +302,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -331,6 +313,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -341,6 +324,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -351,6 +335,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -361,6 +346,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -371,6 +357,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
         matched_literal += string(yytext); // might need if error occurs
     } else {
         matched_literal += string(yytext);
+        BEGIN INITIAL;
         BEGIN ERR_MULTIPLE_CHAR;
     }
 }
@@ -397,159 +384,111 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 
 {ADDOP} {
-    string token_name = string(yytext);
-    string token_type = "ADDOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return ADDOP;
+    string token_name = "ADDOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {MULOP} {
-    string token_name = string(yytext);
-    string token_type = "MULOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return MULOP;
+    string token_name = "MULOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {INCOP} {
-    string token_name = string(yytext);
-    string token_type = "INCOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return INCOP;
-}
-
-{DECOP} {
-    string token_name = string(yytext);
-    string token_type = "DECOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return DECOP;
+    string token_name = "INCOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {RELOP} {
-    string token_name = string(yytext);
-    string token_type = "RELOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return RELOP;
+    string token_name = "RELOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {ASSIGNOP} {
-    string token_name = string(yytext);
-    string token_type = "ASSIGNOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return ASSIGNOP;
+    string token_name = "ASSIGNOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {LOGICOP} {
-    string token_name = string(yytext);
-    string token_type = "LOGICOP";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return LOGICOP;
+    string token_name = "LOGICOP";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {NOT} {
-    string token_name = string(yytext);
-    string token_type = "NOT";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return NOT;
+    string token_name = "NOT";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {LPAREN} {
-    string token_name = string(yytext);
-    string token_type = "LPAREN";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return LPAREN;
+    string token_name = "LPAREN";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {RPAREN} {
-    string token_name = string(yytext);
-    string token_type = "RPAREN";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return RPAREN;
+    string token_name = "RPAREN";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {LCURL} {
-    string token_name = string(yytext);
-    string token_type = "LCURL";
-    write_token_and_log(token_type, token_name, string(yytext));
-    
-    return LCURL;
+    string token_name = "LCURL";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
+    symbol_table.enter_scope();
 }
 
 {RCURL} {
-    string token_name = string(yytext);
-    string token_type = "RCURL";
-    write_token_and_log(token_type, token_name, string(yytext));
-    
-    return RCURL;
+    string token_name = "RCURL";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
+    symbol_table.exit_scope();
 }
 
 {LTHIRD} {
-    string token_name = string(yytext);
-    string token_type = "LTHIRD";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return LTHIRD;
+    string token_name = "LTHIRD";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {RTHIRD} {
-    string token_name = string(yytext);
-    string token_type = "RTHIRD";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return RTHIRD;
+    string token_name = "RTHIRD";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {COMMA} {
-    string token_name = string(yytext);
-    string token_type = "COMMA";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return COMMA;
+    string token_name = "COMMA";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 {SEMICOLON} {
-    string token_name = string(yytext);
-    string token_type = "SEMICOLON";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return SEMICOLON;
-}
-
-{PRINTLN} {
-    string token_name = string(yytext);
-    string token_type = "PRINTLN";
-    write_token_and_log(token_type, token_name, string(yytext));
-
-    return PRINTLN;
+    string token_name = "SEMICOLON";
+    string token_attr = string(yytext);
+    write_token_and_log(token_name, token_attr, string(yytext));
 }
 
 
 {ID} {
-    string token_name = string(yytext);
-    string token_type = "ID";
-    string token = string("<") + token_type + ", " + token_name + ">";
-    write_token_and_log(token_type, token_name, string(yytext));
-   
-    yylval.syminfo_ptr = new SymbolInfo(token_name, token_type);
-
-    return ID;
+    string token_name = "ID";
+    string token_attr = string(yytext);
+    string token = string("<") + token_name + ", " + token_attr + ">";
+    write_token_and_log(token_name, token_attr, string(yytext));
+    
+    ostringstream osstrm;
+    if (symbol_table.insert(token_attr, token_name)) {
+        osstrm << symbol_table;
+        fprintf(log_file, "%s\n", osstrm.str().c_str());
+    } else {
+        fprintf(log_file, "[REDEFINITION] Cannot insert %s into symbol table.\n", token.c_str());
+    }
 }
 
 
@@ -561,10 +500,10 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <STRING>{DOUBLEQUOTES} {
-    string token_name = matched_str;
-    string token_type = "STRING";
+    string token_name = "STRING";
+    string token_attr = matched_str;
     string lexeme = string("\"") + matched_literal + "\"";
-    write_token_and_log(token_type, token_name, lexeme);
+    write_token_and_log(token_name, token_attr, lexeme);
 
     line_count += pending_line_inc;
 
@@ -630,10 +569,10 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <LINE_COMMENT>{NEWLINE} {
-    string token_name = matched_comment;
-    string token_type = "COMMENT";
+    string token_name = "COMMENT";
+    string token_attr = matched_comment;
     string lexeme = "//" + matched_comment;
-    write_log(token_type, token_name, lexeme);
+    write_log(token_name, token_attr, lexeme);
 
     line_count += pending_line_inc + 1;
 
@@ -657,10 +596,10 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <BLOCK_COMMENT>{BLOCK_COMMENT_END} {
-    string token_name = matched_comment;
-    string token_type = "COMMENT";
+    string token_name = "COMMENT";
+    string token_attr = matched_comment;
     string lexeme = "//" + matched_comment;
-    write_log(token_type, token_name, lexeme);
+    write_log(token_name, token_attr, lexeme);
 
     line_count += pending_line_inc;
 
@@ -706,10 +645,30 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 %%
 
 
-void write_log(string token_name, string token_attr, string lexeme) {}
+int main(int argc, char* argv[]) {
+    if (argc != 4) {
+        cout << "ERROR: lexer needs input, token, log file names as argument\n";
+        return 0;
+    }
 
-void write_token_and_log(string token_name, string token_attr, string lexeme) {}
+    FILE* input_file = fopen(argv[1], "r");
+    token_file = fopen(argv[2], "w");
+    log_file = fopen(argv[3], "w");
 
-void write_error_log(string log, string lexeme) {
-    error_count++;
+    if (!input_file || !token_file || !log_file) {
+        cout << "ERROR: Could not open file\n";
+        return 0;
+    }
+
+    yyin = input_file;
+    yylex();
+
+    fprintf(log_file, "Total lines: %d\n", line_count);
+    fprintf(log_file, "Total errors: %d\n", error_count);
+
+    fclose(input_file);
+    fclose(token_file);
+    fclose(log_file);
+
+    return 0;
 }

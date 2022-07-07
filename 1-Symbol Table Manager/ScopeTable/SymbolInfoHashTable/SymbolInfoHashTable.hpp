@@ -26,15 +26,13 @@ public:
 
     int get_num_buckets();
 
-    bool insert(const string& symbol_info_name, const string& symbol_info_type, vector<string> = {});
+    bool insert(const string& symbol_info_name, const string& symbol_info_type);
 
     SymbolInfo* lookup(const string& symbol_info_name);
 
     bool delete_symbolinfo(const string& symbol_info_name);
 
     void print();
-
-    friend ostream& operator<<(ostream&, SymbolInfoHashTable&);
 
 private:
     int hash(const string& symbol_info_name);

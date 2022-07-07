@@ -4,8 +4,6 @@
 
 using namespace std;
 
-class SymbolInfoHashTable;
-
 /**
  * @brief Wrapper class on the Hashtable that holds all the tokens for the current scope.
  * Holds the depth of this scope table in comparison to all previous scope tables.
@@ -22,7 +20,7 @@ class ScopeTable {
     int num_deleted_children;
 
 public:
-    ScopeTable(int, ScopeTable*);
+    ScopeTable(int total_buckets, ScopeTable*);
 
     ~ScopeTable();
 
@@ -38,13 +36,11 @@ public:
 
     int get_current_id();
 
-    bool insert(const string&, const string&);
+    bool insert(const string& symbol_info_name, const string& symbol_info_type);
 
-    bool insert(const string&, const string&, vector<string>&);
+    SymbolInfo* lookup(const string& symbol_info_name);
 
-    SymbolInfo* lookup(const string&);
-
-    bool delete_symbolinfo(const string&);
+    bool delete_symbolinfo(const string& symbol_info_name);
 
     void print();
 
