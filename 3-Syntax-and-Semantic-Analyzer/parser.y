@@ -33,11 +33,12 @@
     vector<SymbolInfo*> params_for_func_scope;
 
     vector<string> split(string, char = ' ');
-    bool is_sym_func(SymbolInfo* syminfo);
-    bool is_func_sym_defined(SymbolInfo* syminfo);
+    bool is_sym_func(SymbolInfo*);
+    bool is_func_sym_defined(SymbolInfo*);
+    bool is_func_signatures_match(SymbolInfo*, SymbolInfo*);
     bool insert_into_symtable(string, string, string, vector<string> = {});
-    bool insert_into_symtable(SymbolInfo* syminfo);
-    bool insert_var_list_into_symtable(string var_type, vector<string> var_names);
+    bool insert_into_symtable(SymbolInfo*);
+    bool insert_var_list_into_symtable(string, vector<string>);
     void write_log(string, SymbolInfo*);
     void write_error_log(string);
     void write_symtable_in_log(SymbolTable&);
@@ -59,7 +60,7 @@
     start program unit var_declaration func_definition type_specifier parameter_list
     compound_statement statements declaration_list statement expression_statement expression
     variable logic_expression rel_expression simple_expression term unary_expression factor argument_list
-    arguments func_declaration func_signature
+    arguments func_declaration func_signature compound_statement_start
 
 %right COMMA
 %right ASSIGNOP
@@ -86,8 +87,6 @@ start:
 
         write_symtable_in_log(symbol_table);
 
-        delete $1;
-
         YYACCEPT;
     }
     ;
@@ -100,8 +99,6 @@ program:
         write_log(production, $$);
 
         write_symtable_in_log(symbol_table);
-
-        delete $1, $2;
     }   
     | unit {
         $$ = new SymbolInfo($1->get_symbol(), "program", VOID_TYPE);
@@ -110,8 +107,6 @@ program:
         write_log(production, $$);
 
         write_symtable_in_log(symbol_table);
-
-        delete $1;
     }
     ;
 
@@ -121,24 +116,18 @@ unit:
 
         string production = "unit : var_declaration";
         write_log(production, $$);
-
-        delete $1;
     }
     | func_declaration {
         $$ = new SymbolInfo($1->get_symbol(), "unit", VOID_TYPE);
 
         string production = "unit : func_declaration";
         write_log(production, $$);
-
-        delete $1;
     }
     | func_definition {
         $$ = new SymbolInfo($1->get_symbol(), "unit", VOID_TYPE);
 
         string production = "unit : func_definition";
         write_log(production, $$);
-
-        delete $1;
     }
     ;
 
@@ -157,8 +146,6 @@ func_signature:
 
         // definition will insert in compound_statement, declaration will insert in func_declaration
         current_func_sym_ptr = new SymbolInfo(func_name, "ID", return_type, param_type_list);
-
-        delete $1, $2, $4;
     }
 
 func_declaration: 
@@ -172,15 +159,14 @@ func_declaration:
 
         string production = "func_declaration : type_specifier ID LPAREN parameter_list RPAREN SEMICOLON";
         write_log(production, $$);
-
-        delete $1;
     }
     ;
 
 func_definition:
     func_signature compound_statement {
         if ($1->get_semantic_type() != VOID_TYPE && $2->get_semantic_type() == VOID_TYPE) {
-            write_error_log($2->get_symbol() + " with non void return type has to return something");
+            write_error_log(current_func_sym_ptr->get_symbol() + 
+                " with non void return type has to return something");
         }
 
         $$ = new SymbolInfo($1->get_symbol() +  " " + $2->get_symbol(), "func_definition", VOID_TYPE);
@@ -190,8 +176,6 @@ func_definition:
 
         current_func_sym_ptr->add_data("defined"); // to catch multiple definition error, but allow definition after declaration
         current_func_sym_ptr = nullptr;
-
-        delete $1, $2;
     }
     ;
 
@@ -213,8 +197,6 @@ parameter_list:
 
         string production = "parameter_list : parameter_list COMMA type_specifier ID";
         write_log(production, $$);
-
-        delete $1, $3, $4;
     }
     | parameter_list COMMA type_specifier {
         string param_type = $3->get_symbol();
@@ -230,8 +212,6 @@ parameter_list:
 
         string production = "parameter_list : parameter_list COMMA type_specifier";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     | type_specifier ID {
         string param_type = $1->get_symbol();
@@ -250,8 +230,6 @@ parameter_list:
 
         string production = "parameter_list : type_specifier ID";
         write_log(production, $$);
-
-        delete $1, $2;
     }
     | type_specifier {
         string param_type = $1->get_symbol();
@@ -262,12 +240,10 @@ parameter_list:
         }
         
         $$ = new SymbolInfo($1->get_symbol(), "parameter_list", VOID_TYPE, 
-            current_func_sym_ptr->get_all_data());
+            param_type_list);
 
         string production = "parameter_list : type_specifier";
         write_log(production, $$);
-
-        delete $1;
     }
     | %empty {
         // empty param list will be added VOID_TYPE in function_signture
@@ -281,11 +257,18 @@ parameter_list:
     }
     ;
 
-compound_statement:
+compound_statement_start:
     LCURL {
-        SymbolInfo* existing_symbol = symbol_table.lookup(current_func_sym_ptr->get_symbol());
-        if (existing_symbol != nullptr && is_sym_func(existing_symbol) && !is_func_sym_defined(existing_symbol)) {
+        SymbolInfo* existing_symbol_ptr = symbol_table.lookup(current_func_sym_ptr->get_symbol());
+        if (
+            existing_symbol_ptr != nullptr && is_sym_func(existing_symbol_ptr) && 
+            !is_func_sym_defined(existing_symbol_ptr)
+        ) {
             // previously declared but not defined, okay
+            if (!is_func_signatures_match(current_func_sym_ptr, existing_symbol_ptr)) {
+                write_error_log(current_func_sym_ptr->get_symbol() + 
+                    " definition does not match declaration signature");
+            }
         } else if (insert_into_symtable(current_func_sym_ptr)) {
             SymbolInfo* old_func_sym_ptr = current_func_sym_ptr;
             current_func_sym_ptr = symbol_table.lookup(current_func_sym_ptr->get_symbol());
@@ -299,20 +282,20 @@ compound_statement:
         }
 
         params_for_func_scope.clear();
-    } statements RCURL {
-        $$ = new SymbolInfo("{\n" + $3->get_symbol() + "}\n", "compound_statement", $3->get_semantic_type());
+    }
 
+compound_statement:
+    compound_statement_start statements RCURL {
+        $$ = new SymbolInfo("{\n" + $2->get_symbol() + "}\n", "compound_statement", $2->get_semantic_type());
 
         string production = "compound_statement : LCURL statements RCURL";
         write_log(production, $$);
 
         write_symtable_in_log(symbol_table);
         symbol_table.exit_scope();
-
-        delete $3;
     }
-    | LCURL RCURL {
-        $$ = new SymbolInfo("{}", "compound_statement", VOID_TYPE);
+    | compound_statement_start RCURL {
+        $$ = new SymbolInfo("{}\n", "compound_statement", VOID_TYPE);
 
         string production = "compound_statement : LCURL RCURL";
         write_log(production, $$);
@@ -332,8 +315,6 @@ var_declaration:
 
         string production = "var_declaration : type_specifier declaration_list SEMICOLON";
         write_log(production, $$);
-
-        delete $1, $2;
     }
     ;
 
@@ -364,8 +345,6 @@ declaration_list:
 
         string production = "declaration_list : declaration_list COMMA ID";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     | declaration_list COMMA ID LTHIRD CONST_INT RTHIRD {
         $$ = new SymbolInfo($1->get_symbol() + "," + $3->get_symbol() + 
@@ -373,24 +352,18 @@ declaration_list:
 
         string production = "declaration_list : declaration_list COMMA ID LTHIRD CONST_INT RTHIRD";
         write_log(production, $$);
-
-        delete $1, $3, $5;
     }
     | ID {
         $$ = new SymbolInfo($1->get_symbol(), "declaration_list", VOID_TYPE);
 
         string production = "declaration_list : ID";
         write_log(production, $$);
-
-        delete $1;
     }
     | ID LTHIRD CONST_INT RTHIRD {
         $$ = new SymbolInfo($1->get_symbol() + "[" + $3->get_symbol() + "]", "declaration_list", VOID_TYPE);
 
         string production = "declaration_list : ID LTHIRD CONST_INT RTHIRD";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     ;
 
@@ -400,8 +373,6 @@ statements:
 
         string production = "statements : statement";
         write_log(production, $$);
-
-        delete $1;
     }
     | statements statement {
         string statement_type = VOID_TYPE;
@@ -415,8 +386,6 @@ statements:
         
         string production = "statements : statements statement";
         write_log(production, $$);
-
-        delete $1, $2;
     }
     ;
 
@@ -426,24 +395,18 @@ statement:
 
         string production = "statement : var_declaration";
         write_log(production, $$);
-
-        delete $1;
     }
     | expression_statement {
         $$ = new SymbolInfo($1->get_symbol(), "statement", VOID_TYPE);
 
         string production = "statement : expression_statement";
         write_log(production, $$);
-
-        delete $1;
     }
     | compound_statement {
         $$ = new SymbolInfo($1->get_symbol(), "statement", $1->get_semantic_type());
 
         string production = "statement : compound_statement";
         write_log(production, $$);
-
-        delete $1;
     }
     | FOR LPAREN expression_statement expression_statement expression RPAREN statement {
         if ($4->get_semantic_type() == VOID_TYPE) {
@@ -455,8 +418,6 @@ statement:
             
         string production = "statement : FOR LPAREN expression_statement expression_statement expression RPAREN statement";
         write_log(production, $$);
-
-        delete $3, $4, $5, $7;
     }
     | IF LPAREN expression RPAREN statement 
     %prec SHIFT_ELSE {
@@ -469,8 +430,6 @@ statement:
 
         string production = "statement : IF LPAREN expression RPAREN statement";
         write_log(production, $$);
-
-        delete $3, $5;
     } 
     | IF LPAREN expression RPAREN statement ELSE statement {
         if ($3->get_semantic_type() == VOID_TYPE) {
@@ -489,8 +448,6 @@ statement:
 
         string production = "statement : IF LPAREN expression RPAREN statement ELSE statement";
         write_log(production, $$);
-
-        delete $3, $5, $7;
     }
     | WHILE LPAREN expression RPAREN statement {
         if ($3->get_semantic_type() == VOID_TYPE) {
@@ -502,16 +459,12 @@ statement:
 
         string production = "statement : WHILE LPAREN expression RPAREN statement";
         write_log(production, $$);
-
-        delete $3, $5;
     }
     | PRINTLN LPAREN ID RPAREN SEMICOLON {
         $$ = new SymbolInfo("printf(" + $3->get_symbol() + ");\n", "statement", VOID_TYPE);
 
         string production = "statement : PRINTLN LPAREN ID RPAREN SEMICOLON";
         write_log(production, $$);
-
-        delete $3;
     }
     | RETURN expression SEMICOLON {
         $$ = new SymbolInfo("return " + $2->get_symbol() + ";\n", "statement", $2->get_semantic_type());
@@ -530,8 +483,6 @@ statement:
             write_error_log("Cannot return " + expression_type + " from a function of " + 
                 func_return_type + " return type");
         }
-
-        delete $2;
     }
     ;
 
@@ -547,8 +498,6 @@ expression_statement:
 
         string production = "expression_statement : expression SEMICOLON";
         write_log(production, $$);
-
-        delete $1;
     }
     ;
 
@@ -576,8 +525,6 @@ variable:
 
         string production = "variable : ID";
         write_log(production, $$);
-
-        delete $1;
     }
     | ID LTHIRD expression RTHIRD {
         if ($3->get_semantic_type() != INT_TYPE) {
@@ -609,8 +556,6 @@ variable:
 
         string production = "variable : ID LTHIRD expression RTHIRD";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     ;
 
@@ -620,11 +565,10 @@ expression:
 
         string production = "expression : logic_expression";
         write_log(production, $$);
-
-        delete $1;
     }
     | variable ASSIGNOP logic_expression {
         string type = $1->get_semantic_type();
+
         if ($3->get_semantic_type() == VOID_TYPE) {
             write_error_log("Void type cannot be assigned to any type");
         } else if ($1->get_semantic_type() == FLOAT_TYPE && $3->get_semantic_type() == INT_TYPE) {
@@ -639,8 +583,6 @@ expression:
 
         string production = "expression : variable ASSIGNOP logic_expression";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     ;
 
@@ -650,8 +592,6 @@ logic_expression:
 
         string production = "logic_expression : rel_expression";
         write_log(production, $$);
-
-        delete $1;
     }
     | rel_expression LOGICOP rel_expression {
         if ($1->get_semantic_type() == VOID_TYPE || $3->get_semantic_type() == VOID_TYPE) {
@@ -663,8 +603,6 @@ logic_expression:
 
         string production = "logic_expression : rel_expression LOGICOP rel_expression";
         write_log(production, $$);
-
-        delete $1, $2, $3;
     }
     ;
 
@@ -674,8 +612,6 @@ rel_expression:
 
         string production = "rel_expression : simple_expression";
         write_log(production, $$);
-
-        delete $1;
     }
     | simple_expression RELOP simple_expression {
         if ($1->get_semantic_type() == VOID_TYPE || $3->get_semantic_type() == VOID_TYPE) {
@@ -687,8 +623,6 @@ rel_expression:
 
         string production = "rel_expression : simple_expression RELOP simple_expression";
         write_log(production, $$);
-
-        delete $1, $2, $3;
     }
     ;
 
@@ -698,8 +632,6 @@ simple_expression:
 
         string production = "simple_expression : term";
         write_log(production, $$);
-
-        delete $1;
     }
     | simple_expression ADDOP term {
         string type = INT_TYPE;
@@ -714,8 +646,6 @@ simple_expression:
 
         string production = "simple_expression : simple_expression ADDOP term";
         write_log(production, $$);
-
-        delete $1, $2, $3;
     }
     ;
 
@@ -725,8 +655,6 @@ term:
 
         string production = "term : unary_expression";
         write_log(production, $$);
-
-        delete $1;
     }
     | term MULOP unary_expression {
         string type = INT_TYPE;
@@ -745,8 +673,6 @@ term:
 
         string production = "term : term MULOP unary_expression";
         write_log(production, $$);
-
-        delete $1, $2, $3;
     }
     ;
 
@@ -757,24 +683,18 @@ unary_expression:
 
         string production = "unary_expression : ADDOP unary_expression";
         write_log(production, $$);
-
-        delete $1, $2;
     }
     | NOT unary_expression {
         $$ = new SymbolInfo("!" + $2->get_symbol(), "unary_expression", INT_TYPE);
 
         string production = "unary_expression : NOT unary_expression";
         write_log(production, $$);
-
-        delete $2;
     }
     | factor {
         $$ = new SymbolInfo($1->get_symbol(), "factor", $1->get_semantic_type());
 
         string production = "unary_expression : factor";
         write_log(production, $$);
-
-        delete $1;
     }
     ;
 
@@ -784,8 +704,6 @@ factor:
 
         string production = "factor : variable";
         write_log(production, $$);
-
-        delete $1;
     }
     | ID LPAREN argument_list RPAREN {
         string func_name = $1->get_symbol();
@@ -817,53 +735,40 @@ factor:
             }
         }
 
-
         $$ = new SymbolInfo($1->get_symbol() + "(" + $3->get_symbol() + ")", "factor", return_type);
 
         string production = "factor : ID LPAREN argument_list RPAREN";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     | LPAREN expression RPAREN {
         $$ = new SymbolInfo("(" + $2->get_symbol() + ")", "factor", $2->get_semantic_type());
 
         string production = "factor : LPAREN expression RPAREN";
         write_log(production, $$);
-
-        delete $2;
     }
     | CONST_INT {
         $$ = new SymbolInfo($1->get_symbol(), "factor", INT_TYPE);
 
         string production = "factor : CONST_INT";
         write_log(production, $$);
-
-        delete $1;
     }
     | CONST_FLOAT {
         $$ = new SymbolInfo($1->get_symbol(), "factor", FLOAT_TYPE);
 
         string production = "factor : CONST_FLOAT";
         write_log(production, $$);
-
-        delete $1;
     }
     | variable INCOP {
         $$ = new SymbolInfo($1->get_symbol() + "++", "factor", $1->get_semantic_type());
 
         string production = "factor : variable INCOP";
         write_log(production, $$);
-
-        delete $1;
     }
     | variable DECOP {
         $$ = new SymbolInfo($1->get_symbol() + "--", "factor", $1->get_semantic_type());
 
         string production = "factor : variable DECOP";
         write_log(production, $$);
-
-        delete $1;
     }
     ;
 
@@ -873,8 +778,6 @@ argument_list:
 
         string production = "argument_list : arguments";
         write_log(production, $$);
-
-        delete $1;
     }
     | %empty {
         // empty params have void type data, but empty args don't
@@ -896,16 +799,12 @@ arguments:
 
         string production = "arguments : arguments COMMA logic_expression";
         write_log(production, $$);
-
-        delete $1, $3;
     }
     | logic_expression {
         $$ = new SymbolInfo($1->get_symbol(), "arguments", VOID_TYPE, {$1->get_semantic_type()});
 
         string production = "arguments : logic_expression";
         write_log(production, $$);
-
-        delete $1;
     }
     ;
 
@@ -935,6 +834,20 @@ bool is_func_sym_defined(SymbolInfo* syminfo) {
     return syminfo->get_all_data()[syminfo->get_all_data().size()-1] == "defined";
 }
 
+bool is_func_signatures_match(SymbolInfo* func_sym_ptr1, SymbolInfo* func_sym_ptr2) {
+    vector<string> param_type_list1 = func_sym_ptr1->get_all_data();
+    vector<string> param_type_list2 = func_sym_ptr2->get_all_data();
+    if (param_type_list1[param_type_list1.size()-1] == "defined") {
+        param_type_list1 = vector<string>(param_type_list1.begin(), param_type_list1.end()-1);
+    }
+    if (param_type_list2[param_type_list2.size()-1] == "defined") {
+        param_type_list2 = vector<string>(param_type_list2.begin(), param_type_list2.end()-1);
+    }
+
+    return func_sym_ptr1->get_symbol() == func_sym_ptr2->get_symbol() && 
+        func_sym_ptr1->get_semantic_type() == func_sym_ptr2->get_semantic_type() &&
+        param_type_list1 == param_type_list2;
+}
 
 bool insert_into_symtable(string symbol, string token_type, string semantic_type, vector<string> data) {
     if (!symbol_table.insert(symbol, token_type, semantic_type, data)) {
