@@ -20,6 +20,7 @@
 
     FILE* input_file,* log_file,* error_file;
 
+    int error_count = 0;
     const int SYM_TABLE_BUCKETS = 10;
     SymbolTable symbol_table(SYM_TABLE_BUCKETS);
 
@@ -40,7 +41,7 @@
     bool insert_into_symtable(SymbolInfo*);
     bool insert_var_list_into_symtable(string, vector<string>);
     void write_log(string, SymbolInfo*);
-    void write_error_log(string);
+    void write_error_log(string, string = "ERROR");
     void write_symtable_in_log(SymbolTable&);
 %}
 
@@ -61,6 +62,10 @@
     compound_statement statements declaration_list statement expression_statement expression
     variable logic_expression rel_expression simple_expression term unary_expression factor argument_list
     arguments func_declaration func_signature compound_statement_start
+
+%destructor {
+    delete $$;
+} <syminfo_ptr>
 
 %right COMMA
 %right ASSIGNOP
@@ -131,29 +136,14 @@ unit:
     }
     ;
 
-func_signature:
-    type_specifier ID LPAREN parameter_list RPAREN {
-        string return_type = $1->get_symbol();
-        string func_name = $2->get_symbol();
-
-        vector<string> param_type_list = $4->get_all_data(); 
-        if (param_type_list.empty()) {
-            param_type_list.push_back(VOID_TYPE); // if empty MUST HAVE VOID to know its a func
-        }
-
-        $$ = new SymbolInfo(return_type + " " + func_name + "(" + $4->get_symbol() + 
-            ")", "func_signature", return_type, param_type_list);
-
-        // definition will insert in compound_statement, declaration will insert in func_declaration
-        current_func_sym_ptr = new SymbolInfo(func_name, "ID", return_type, param_type_list);
-    }
-
 func_declaration: 
     func_signature SEMICOLON {
         $$ = new SymbolInfo($1->get_symbol() + ";\n", "func_declaration", VOID_TYPE);
 
         // declaration, so no scope will be created, so have to manually insert the built func sym
         insert_into_symtable(current_func_sym_ptr);
+
+        delete current_func_sym_ptr;
         current_func_sym_ptr = nullptr;
         params_for_func_scope.clear();
 
@@ -176,6 +166,41 @@ func_definition:
 
         current_func_sym_ptr->add_data("defined"); // to catch multiple definition error, but allow definition after declaration
         current_func_sym_ptr = nullptr;
+    }
+    ;
+
+func_signature:
+    type_specifier ID LPAREN parameter_list RPAREN {
+        string return_type = $1->get_symbol();
+        string func_name = $2->get_symbol();
+
+        vector<string> param_type_list = $4->get_all_data(); 
+        if (param_type_list.empty()) {
+            param_type_list.push_back(VOID_TYPE); // if empty MUST HAVE VOID to know its a func
+        }
+
+        $$ = new SymbolInfo(return_type + " " + func_name + "(" + $4->get_symbol() + 
+            ")", "func_signature", return_type, param_type_list);
+
+        // definition will insert in compound_statement, declaration will insert in func_declaration
+        current_func_sym_ptr = new SymbolInfo(func_name, "ID", return_type, param_type_list);
+    }
+    | type_specifier ID LPAREN parameter_list error RPAREN {
+        string return_type = $1->get_symbol();
+        string func_name = $2->get_symbol();
+
+        vector<string> param_type_list = $4->get_all_data(); 
+        if (param_type_list.empty()) {
+            param_type_list.push_back(VOID_TYPE); // if empty MUST HAVE VOID to know its a func
+        }
+
+        $$ = new SymbolInfo(return_type + " " + func_name + "(" + $4->get_symbol() + 
+            " [SYNTAX_ERR] )", "func_signature", return_type, param_type_list);
+
+        current_func_sym_ptr = new SymbolInfo(func_name, "ID", return_type, param_type_list);
+    
+        // yyerror("resumed at RPAREN");
+        yyerrok;
     }
     ;
 
@@ -257,8 +282,40 @@ parameter_list:
     }
     ;
 
+compound_statement:
+    compound_statement_start statements RCURL {
+        $$ = new SymbolInfo($1->get_symbol() + "\n" + $2->get_symbol() + "}\n", "compound_statement", 
+            $2->get_semantic_type());
+
+        string production = "compound_statement : LCURL statements RCURL";
+        write_log(production, $$);
+
+        write_symtable_in_log(symbol_table);
+        symbol_table.exit_scope();
+    }
+    | compound_statement_start RCURL {
+        $$ = new SymbolInfo($1->get_symbol() + "\n" + "}\n", "compound_statement", VOID_TYPE);
+
+        string production = "compound_statement : LCURL RCURL";
+        write_log(production, $$);
+
+        write_symtable_in_log(symbol_table);
+        symbol_table.exit_scope();
+    }
+    | error RCURL {
+        $$ = new SymbolInfo("{\n[SYNTAX_ERR]\n}\n", "compound_statement", VOID_TYPE);
+
+        write_symtable_in_log(symbol_table);
+        symbol_table.exit_scope();
+
+        // yyerror("resumed at RCULR");
+        yyerrok;
+    }
+    ;
+
 compound_statement_start:
     LCURL {
+        $$ = new SymbolInfo("{", "LCURL", VOID_TYPE);
         SymbolInfo* existing_symbol_ptr = symbol_table.lookup(current_func_sym_ptr->get_symbol());
         if (
             existing_symbol_ptr != nullptr && is_sym_func(existing_symbol_ptr) && 
@@ -283,25 +340,18 @@ compound_statement_start:
 
         params_for_func_scope.clear();
     }
+    | error LCURL {
+        $$ = new SymbolInfo("[SYNTAX_ERR] {", "LCURL", VOID_TYPE);    
+        symbol_table.enter_scope();
 
-compound_statement:
-    compound_statement_start statements RCURL {
-        $$ = new SymbolInfo("{\n" + $2->get_symbol() + "}\n", "compound_statement", $2->get_semantic_type());
+        for (SymbolInfo* param_symbol : params_for_func_scope) {
+            insert_into_symtable(param_symbol);
+        }
 
-        string production = "compound_statement : LCURL statements RCURL";
-        write_log(production, $$);
+        params_for_func_scope.clear();
 
-        write_symtable_in_log(symbol_table);
-        symbol_table.exit_scope();
-    }
-    | compound_statement_start RCURL {
-        $$ = new SymbolInfo("{}\n", "compound_statement", VOID_TYPE);
-
-        string production = "compound_statement : LCURL RCURL";
-        write_log(production, $$);
-
-        write_symtable_in_log(symbol_table);
-        symbol_table.exit_scope();
+        // yyerror("resumed at LCURL");
+        yyerrok;
     }
     ;
 
@@ -315,6 +365,11 @@ var_declaration:
 
         string production = "var_declaration : type_specifier declaration_list SEMICOLON";
         write_log(production, $$);
+    }
+    | error SEMICOLON {
+        $$ = new SymbolInfo("[SYNTAX_ERR] ;\n", "var_declaration", VOID_TYPE);
+        // yyerror("resumed at SEMICOLON");
+        yyerrok;
     }
     ;
 
@@ -361,6 +416,12 @@ declaration_list:
     }
     | ID LTHIRD CONST_INT RTHIRD {
         $$ = new SymbolInfo($1->get_symbol() + "[" + $3->get_symbol() + "]", "declaration_list", VOID_TYPE);
+
+        string production = "declaration_list : ID LTHIRD CONST_INT RTHIRD";
+        write_log(production, $$);
+    }
+    | declaration_list error COMMA ID {
+        $$ = new SymbolInfo($1->get_symbol() + "," + $4->get_symbol(), "declaration_list", VOID_TYPE);
 
         string production = "declaration_list : ID LTHIRD CONST_INT RTHIRD";
         write_log(production, $$);
@@ -473,12 +534,15 @@ statement:
         write_log(production, $$);
 
         string expression_type = $2->get_semantic_type();
-        string func_return_type = current_func_sym_ptr->get_semantic_type();
+        string func_return_type = VOID_TYPE;
+        if (current_func_sym_ptr != nullptr) {
+            func_return_type = current_func_sym_ptr->get_semantic_type();
+        }
 
         if (func_return_type == FLOAT_TYPE && expression_type == INT_TYPE) {
             // okay
         } else if (func_return_type == INT_TYPE && expression_type == FLOAT_TYPE) {
-            write_error_log("[WARNING] Returning float type from a function with int return type");
+            write_error_log("Returning float type from a function with int return type", "WARNING");
         } else if (func_return_type != expression_type) {
             write_error_log("Cannot return " + expression_type + " from a function of " + 
                 func_return_type + " return type");
@@ -574,7 +638,7 @@ expression:
         } else if ($1->get_semantic_type() == FLOAT_TYPE && $3->get_semantic_type() == INT_TYPE) {
             // okay  
         } else if ($1->get_semantic_type() == INT_TYPE && $3->get_semantic_type() == FLOAT_TYPE) {
-            write_error_log("[WARNING]: Assigning float to int");
+            write_error_log("Assigning float to int", "WARNING");
         } else if ($1->get_semantic_type() != $3->get_semantic_type()) {
             write_error_log("Cannot assign " + $3->get_semantic_type() + " to " + $1->get_semantic_type());
         }
@@ -660,7 +724,10 @@ term:
         string type = INT_TYPE;
         if ($1->get_semantic_type() == VOID_TYPE || $3->get_semantic_type() == VOID_TYPE) {
             write_error_log("Multiplication not defined on void type");
-        } else if ($1->get_semantic_type() == FLOAT_TYPE || $3->get_semantic_type() == FLOAT_TYPE) {
+        } else if (
+            $2->get_symbol() != "%" && 
+            ($1->get_semantic_type() == FLOAT_TYPE || $3->get_semantic_type() == FLOAT_TYPE)
+        ) {
             type = FLOAT_TYPE;
         }
 
@@ -811,7 +878,7 @@ arguments:
 %%
 
 void yyerror(char* s) {
-
+    write_error_log(s, "SYNTAX_ERR");
 }
 
 vector<string> split(string str, char delim) {
@@ -851,7 +918,7 @@ bool is_func_signatures_match(SymbolInfo* func_sym_ptr1, SymbolInfo* func_sym_pt
 
 bool insert_into_symtable(string symbol, string token_type, string semantic_type, vector<string> data) {
     if (!symbol_table.insert(symbol, token_type, semantic_type, data)) {
-        write_error_log("[REDEF] Symbol name " + symbol + " already exists");
+        write_error_log("Symbol name " + symbol + " already exists");
         return false;
     }
     return true;
@@ -885,15 +952,16 @@ void write_log(string production, SymbolInfo* matched_sym_ptr) {
     fprintf(log_file, "%s\n\n", matched_sym_ptr->get_symbol().c_str());
 }
 
-void write_error_log(string log_str) {
-    fprintf(log_file, "[ERROR] Line %d: %s\n", line_count, log_str.c_str());
-    fprintf(error_file, "[ERROR] Line %d: %s\n", line_count, log_str.c_str());
+void write_error_log(string log_str, string tag) {
+    error_count++;
+    fprintf(log_file, "[%s] Line %d: %s\n\n", tag.c_str(), line_count, log_str.c_str());
+    fprintf(error_file, "[%s] Line %d: %s\n\n", tag.c_str(), line_count, log_str.c_str());
 }
 
 void write_symtable_in_log(SymbolTable& symtable) {
     ostringstream osstrm;
     osstrm << symtable;
-    fprintf(log_file, "%s\n", osstrm.str().c_str());
+    fprintf(log_file, "%s\n\n", osstrm.str().c_str());
 }
 
 int main(int argc, char* argv[]) {
@@ -914,6 +982,8 @@ int main(int argc, char* argv[]) {
     yyin = input_file;
 
     yyparse();
+
+    fprintf(log_file, "Total lines: %d\nTotal errors: %d", --line_count, error_count);
 
     fclose(input_file);
     fclose(log_file);

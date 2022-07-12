@@ -15,11 +15,14 @@
     using namespace std;
 
     void yyerror(char*);
+    
+    extern FILE* log_file;
+    extern FILE* error_file;
 
     // counts
     int line_count = 1;
     int pending_line_inc = 0;
-    int error_count = 0;
+    extern int error_count;
 
     // buffer
     string matched_literal;
@@ -28,10 +31,10 @@
     string matched_str;
     string matched_comment;
 
-    void write_log(string, string, string);
-    void write_token_and_log(string, string, string);
-    void write_error_log(string, string lexeme = "");
-    void write_symtable_in_log(SymbolTable& symtable);
+    void write_log_lex(string, string, string);
+    void write_token_and_log_lex(string, string, string);
+    void write_error_log_lex(string, string lexeme = "");
+    void write_symtable_in_log_lex(SymbolTable& symtable);
 %}
 
 
@@ -41,7 +44,7 @@
 %x ERR_MULTIPLE_CHAR
 %x STRING
 
-UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0~@!$#\^\*%&\(\)\[\]\{\}<>\+=_\-\|\\;:'\",\.\? ]
+UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0!\*%&\(\)\[\]\{\}<>\+=_\-\|\\;'\",\. ]
 
 IF_KW if
 FOR_KW for
@@ -141,14 +144,14 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 %%
 
 {UNRECOGNIZED_CHARSET} {
-    write_error_log("Unrecognized character.", string(yytext));
+    write_error_log_lex("Unrecognized character.", string(yytext));
 }
 
 
 {IF_KW} {
     string symbol = yytext;
     string token_type = "IF";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return IF;
 }
@@ -156,7 +159,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {FOR_KW} {
     string symbol = yytext;
     string token_type = "FOR";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return FOR;
 }
@@ -164,7 +167,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {INT_KW} {
     string symbol = yytext;
     string token_type = "INT";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return INT; 
 }
@@ -172,7 +175,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {FLOAT_KW} {
     string symbol = yytext;
     string token_type = "FLOAT";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return FLOAT; 
 }
@@ -180,7 +183,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {VOID_KW} {
     string symbol = yytext;
     string token_type = "VOID";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return VOID;
 }
@@ -188,7 +191,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {ELSE_KW} {
     string symbol = yytext;
     string token_type = "ELSE";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return ELSE; 
 }
@@ -196,7 +199,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {WHILE_KW} {
     string symbol = yytext;
     string token_type = "WHILE";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return WHILE;
 }
@@ -204,7 +207,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {RETURN_KW} {
     string symbol = yytext;
     string token_type = "RETURN";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return RETURN;
 }
@@ -219,7 +222,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = yytext;
     string token_type = "CONST_INT";
     string token = string("<") + token_type + ", " + symbol + ">";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -230,7 +233,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = yytext;
     string token_type = "CONST_FLOAT";
     string token = string("<") + token_type + ", " + symbol + ">";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -246,13 +249,13 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <CHAR>{SINGLEQUOTES} {
     if (matched_char == -1) {
         string lexeme = "''";
-        write_error_log("Empty character constant.", lexeme);
+        write_error_log_lex("Empty character constant.", lexeme);
     } else {
         string symbol = string(1, matched_char);
         string token_type = "CONST_CHAR";
         string token = string("<") + token_type + ", " + symbol + ">";
         string lexeme = string("'") + matched_literal + string("'");
-        write_token_and_log(token_type, symbol, lexeme);
+        write_token_and_log_lex(token_type, symbol, lexeme);
     }
 
     BEGIN INITIAL;
@@ -260,7 +263,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <CHAR>{NEWLINE} {
     string lexeme = string("'") + matched_literal;
-    write_error_log("Unterminated character.", lexeme);
+    write_error_log_lex("Unterminated character.", lexeme);
 
     line_count++;
 
@@ -268,7 +271,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 <CHAR,ERR_MULTIPLE_CHAR>{ESCAPED_CHARS_SPECIAL_EXCEPT_NL} {
-    write_error_log("Not a valid character.", string(yytext));
+    write_error_log_lex("Not a valid character.", string(yytext));
 }
 
 <CHAR>{SINGLECHAR_LIT} {
@@ -373,14 +376,14 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <ERR_MULTIPLE_CHAR>{SINGLEQUOTES} {
     string lexeme = string("'") + matched_literal + string("'");
-    write_error_log("Multiple character constant error.", lexeme);
+    write_error_log_lex("Multiple character constant error.", lexeme);
 
     BEGIN INITIAL;
 }
 
 <ERR_MULTIPLE_CHAR>{NEWLINE} {
     string lexeme = string("'") + matched_literal;
-    write_error_log("Unterminated character.", lexeme);
+    write_error_log_lex("Unterminated character.", lexeme);
 
     line_count++;
 
@@ -395,7 +398,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {ADDOP} {
     string symbol = string(yytext);
     string token_type = "ADDOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -405,7 +408,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {MULOP} {
     string symbol = string(yytext);
     string token_type = "MULOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -415,7 +418,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {INCOP} {
     string symbol = string(yytext);
     string token_type = "INCOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return INCOP;
 }
@@ -423,7 +426,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {DECOP} {
     string symbol = string(yytext);
     string token_type = "DECOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return DECOP;
 }
@@ -431,7 +434,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {RELOP} {
     string symbol = string(yytext);
     string token_type = "RELOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -441,7 +444,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {ASSIGNOP} {
     string symbol = string(yytext);
     string token_type = "ASSIGNOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return ASSIGNOP;
 }
@@ -449,7 +452,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LOGICOP} {
     string symbol = string(yytext);
     string token_type = "LOGICOP";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -459,7 +462,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {NOT} {
     string symbol = string(yytext);
     string token_type = "NOT";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return NOT;
 }
@@ -467,7 +470,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LPAREN} {
     string symbol = string(yytext);
     string token_type = "LPAREN";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return LPAREN;
 }
@@ -475,7 +478,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {RPAREN} {
     string symbol = string(yytext);
     string token_type = "RPAREN";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return RPAREN;
 }
@@ -483,7 +486,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LCURL} {
     string symbol = string(yytext);
     string token_type = "LCURL";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
     
     return LCURL;
 }
@@ -491,7 +494,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {RCURL} {
     string symbol = string(yytext);
     string token_type = "RCURL";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
     
     return RCURL;
 }
@@ -499,7 +502,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {LTHIRD} {
     string symbol = string(yytext);
     string token_type = "LTHIRD";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return LTHIRD;
 }
@@ -507,7 +510,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {RTHIRD} {
     string symbol = string(yytext);
     string token_type = "RTHIRD";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return RTHIRD;
 }
@@ -515,7 +518,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {COMMA} {
     string symbol = string(yytext);
     string token_type = "COMMA";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return COMMA;
 }
@@ -523,7 +526,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {SEMICOLON} {
     string symbol = string(yytext);
     string token_type = "SEMICOLON";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return SEMICOLON;
 }
@@ -531,7 +534,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 {PRINTLN} {
     string symbol = string(yytext);
     string token_type = "PRINTLN";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
 
     return PRINTLN;
 }
@@ -541,7 +544,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = string(yytext);
     string token_type = "ID";
     string token = string("<") + token_type + ", " + symbol + ">";
-    write_token_and_log(token_type, symbol, string(yytext));
+    write_token_and_log_lex(token_type, symbol, string(yytext));
    
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
@@ -560,7 +563,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = matched_str;
     string token_type = "STRING";
     string lexeme = string("\"") + matched_literal + "\"";
-    write_token_and_log(token_type, symbol, lexeme);
+    write_token_and_log_lex(token_type, symbol, lexeme);
 
     line_count += pending_line_inc;
 
@@ -611,7 +614,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 <STRING>{NEWLINE} {
     line_count += pending_line_inc; // so error can point to actual line
     string lexeme = string("\"") + matched_literal;
-    write_error_log("Unterminated string.", lexeme);
+    write_error_log_lex("Unterminated string.", lexeme);
 
     line_count++;
 
@@ -629,7 +632,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = matched_comment;
     string token_type = "COMMENT";
     string lexeme = "//" + matched_comment;
-    write_log(token_type, symbol, lexeme);
+    write_log_lex(token_type, symbol, lexeme);
 
     line_count += pending_line_inc + 1;
 
@@ -656,7 +659,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = matched_comment;
     string token_type = "COMMENT";
     string lexeme = "//" + matched_comment;
-    write_log(token_type, symbol, lexeme);
+    write_log_lex(token_type, symbol, lexeme);
 
     line_count += pending_line_inc;
 
@@ -669,7 +672,7 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 
 <BLOCK_COMMENT><<EOF>> {
     string lexeme = string("\\**") + matched_comment;
-    write_error_log("Unterminated comment.", lexeme);
+    write_error_log_lex("Unterminated comment.", lexeme);
 
     line_count += pending_line_inc;
     pending_line_inc = 0;
@@ -687,25 +690,27 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 }
 
 {ERR_TOO_MANY_DECIMAL} {
-    write_error_log("Too many decimals.", string(yytext));    
+    write_error_log_lex("Too many decimals.", string(yytext));    
 }
 
 {ERR_ILL_FORMED_NUM} {
-    write_error_log("Ill formed number.", string(yytext));
+    write_error_log_lex("Ill formed number.", string(yytext));
 }
 
 {ERR_INVALID_SUFF_PREF} {
-    write_error_log("Invalid suffix on numeric constant or invalid prefix on identifier.", string(yytext));
+    write_error_log_lex("Invalid suffix on numeric constant or invalid prefix on identifier.", string(yytext));
 }
 
 
 %%
 
+void write_log_lex(string token_name, string token_attr, string lexeme) {
+}
 
-void write_log(string symbol, string token_attr, string lexeme) {}
+void write_token_and_log_lex(string token_name, string token_attr, string lexeme) {
+}
 
-void write_token_and_log(string symbol, string token_attr, string lexeme) {}
-
-void write_error_log(string log, string lexeme) {
+void write_error_log_lex(string log, string lexeme) {
     error_count++;
+    fprintf(log_file, "[ERROR]: Line no %d: %s Lexeme: %s\n", line_count, log.c_str(), lexeme.c_str());
 }
