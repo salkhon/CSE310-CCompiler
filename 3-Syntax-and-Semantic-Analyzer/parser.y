@@ -521,7 +521,7 @@ statement:
         string production = "statement : WHILE LPAREN expression RPAREN statement";
         write_log(production, $$);
     }
-    | PRINTLN LPAREN ID RPAREN SEMICOLON {
+    | PRINTLN LPAREN variable RPAREN SEMICOLON {
         $$ = new SymbolInfo("printf(" + $3->get_symbol() + ");\n", "statement", VOID_TYPE);
 
         string production = "statement : PRINTLN LPAREN ID RPAREN SEMICOLON";

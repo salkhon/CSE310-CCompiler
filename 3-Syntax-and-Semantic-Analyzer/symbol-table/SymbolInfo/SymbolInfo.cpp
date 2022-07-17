@@ -59,7 +59,6 @@ void SymbolInfo::add_data(string data_str) {
 }
 
 ostream& operator<<(ostream& ostrm, SymbolInfo& syminfo) {
-    ostrm << "<" << syminfo.get_symbol() << ", " << syminfo.get_token_type() << ", "
-        << syminfo.get_semantic_type() << ">";
+    ostrm << "<" << syminfo.get_symbol() << ", " << syminfo.get_token_type() << ">";
     return ostrm;
 };
