@@ -16,9 +16,6 @@
 
     void yyerror(char*);
     
-    extern FILE* log_file;
-    extern FILE* error_file;
-
     // counts
     int line_count = 1;
     int pending_line_inc = 0;
@@ -30,6 +27,8 @@
     char matched_char;
     string matched_str;
     string matched_comment;
+
+    extern void write_error_log(string, string="ERROR");
 
     void write_log_lex(string, string, string);
     void write_token_and_log_lex(string, string, string);
@@ -144,9 +143,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
 %%
 
 {UNRECOGNIZED_CHARSET} {
-    write_error_log_lex("Unrecognized character.", string(yytext));
+    write_error_log_lex("Unrecognized character", string(yytext));
 }
-
 
 {IF_KW} {
     string symbol = yytext;
@@ -712,5 +710,6 @@ void write_token_and_log_lex(string token_name, string token_attr, string lexeme
 
 void write_error_log_lex(string log, string lexeme) {
     error_count++;
-    fprintf(log_file, "[ERROR]: Line no %d: %s Lexeme: %s\n", line_count, log.c_str(), lexeme.c_str());
+    string log_with_lexemme = log + ". Lexeme: " + lexeme;
+    write_error_log(log_with_lexemme, "LEX_ERR");
 }
