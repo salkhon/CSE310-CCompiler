@@ -45,3 +45,4 @@ test/
 log.txt
 *.tab.c
 *.tab.h
+*.asm
