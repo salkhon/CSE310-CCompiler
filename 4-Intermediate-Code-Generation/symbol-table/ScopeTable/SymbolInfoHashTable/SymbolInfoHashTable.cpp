@@ -100,6 +100,19 @@ bool SymbolInfoHashTable::insert(const string& symbol, const string& token_type,
     }
 }
 
+bool SymbolInfoHashTable::insert_copy(SymbolInfo* syminfo_ptr) {
+    int bucket = this->hash(syminfo_ptr->get_symbol());
+    SymbolInfo* collision = _find_syminfo_name_in_chain(syminfo_ptr->get_symbol(), this->table[bucket]);
+
+    if (collision == nullptr) {
+        SymbolInfo* insertion = new SymbolInfo(*syminfo_ptr);
+        _insert_at_the_end_of_chain(insertion, this->table, bucket);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 SymbolInfo* SymbolInfoHashTable::lookup(const string& symbol) {
     int bucket = this->hash(symbol);
     SymbolInfo* target = _find_syminfo_name_in_chain(symbol, this->table[bucket]);

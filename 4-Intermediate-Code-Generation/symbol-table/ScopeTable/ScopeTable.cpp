@@ -56,6 +56,17 @@ bool ScopeTable::insert(const string& symbol, const string& token_type, string& 
 }
 
 /**
+ * @brief Calles the copy constructor using the provided symbol pointer. Inserts that copy. 
+ * 
+ * @param syminfo_ptr 
+ * @return true Insertion successful
+ * @return false Collision
+ */
+bool ScopeTable::insert_copy(SymbolInfo* syminfo_ptr) {
+    return this->hashtable->insert_copy(syminfo_ptr);
+}
+
+/**
  * @brief Looks up the token by name.
  *
  * @param symbol Name of token to search.

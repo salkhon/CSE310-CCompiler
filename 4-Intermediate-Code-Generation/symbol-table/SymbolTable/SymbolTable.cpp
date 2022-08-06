@@ -102,6 +102,22 @@ bool SymbolTable::insert(const string& symbol, const string& token_type,
 }
 
 /**
+ * @brief Inserts a copy of the provided symbol ptr. Copies symbol name, token type semantic type, data[], 
+ * and Code generation info. 
+ * 
+ * @param syminfo_ptr Pointer to the symbol to be inserted.
+ * @return true Insert successful
+ * @return false Collision
+ */
+bool SymbolTable::insert_copy(SymbolInfo* syminfo_ptr) {
+    if (this->current_scope_table == nullptr) {
+        return false;
+    }
+
+    return this->current_scope_table->insert_copy(syminfo_ptr);
+}
+
+/**
  * @brief Removes a token from the current scope table.
  *
  * @param symbol Symbol to delete

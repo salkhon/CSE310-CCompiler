@@ -25,7 +25,6 @@
 IF_KW if
 FOR_KW for
 INT_KW int
-FLOAT_KW float
 VOID_KW void
 ELSE_KW else
 WHILE_KW while
@@ -36,8 +35,6 @@ WHITESPACE [ \t]*
 DIGIT [0-9]
 DIGITS {DIGIT}+
 INTNUM {DIGITS}
-FLOATNUM {INTNUM}?\.{DIGITS}
-EXPNUM ({INTNUM}|{FLOATNUM})[eE]{INTNUM}
 
 NEWLINE \n
 
@@ -77,10 +74,6 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGIT}|_)*
     return INT; 
 }
 
-{FLOAT_KW} {
-    return FLOAT; 
-}
-
 {VOID_KW} {
     return VOID;
 }
@@ -110,15 +103,6 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGIT}|_)*
     yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
     return CONST_INT;
-}
-
-{FLOATNUM}|{EXPNUM} {
-    string symbol = yytext;
-    string token_type = "CONST_FLOAT";
-
-    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
-
-    return CONST_FLOAT;
 }
 
 {ADDOP} {
@@ -208,7 +192,6 @@ ID ({ALPHABET}|_)({ALPHABET}|{DIGIT}|_)*
 {PRINTLN} {
     return PRINTLN;
 }
-
 
 {ID} {
     string symbol = string(yytext);

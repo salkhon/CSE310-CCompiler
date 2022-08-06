@@ -32,6 +32,8 @@ public:
 
     bool insert(const string&, const string&, string, vector<string>);
 
+    bool insert_copy(SymbolInfo*);
+
     bool remove(const string&);
 
     SymbolInfo* lookup(const string&);
