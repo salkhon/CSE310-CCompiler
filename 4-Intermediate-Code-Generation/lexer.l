@@ -43,7 +43,7 @@
 %x ERR_MULTIPLE_CHAR
 %x STRING
 
-UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0!\*%&\(\)\[\]\{\}<>\+=_\-\|\\;'\",\. ]
+UNRECOGNIZED_CHARSET [^a-zA-Z0-9\a\b\f\n\r\t\v\0!\*%&\(\)\[\]\{\}<>\+=_\-\|\\;'\",\.~ ]
 
 IF_KW if
 FOR_KW for
@@ -98,7 +98,7 @@ DECOP "--"
 RELOP <|<=|>|>=|==|!=
 ASSIGNOP =
 LOGICOP &&|"||"
-NOT !
+NOT !|~
 LPAREN "("
 RPAREN ")"
 LCURL "{"
@@ -444,6 +444,8 @@ ERR_INVALID_SUFF_PREF {DIGITS}{ID}
     string symbol = string(yytext);
     string token_type = "NOT";
     write_token_and_log_lex(token_type, symbol, string(yytext));
+
+    yylval.syminfo_ptr = new SymbolInfo(symbol, token_type);
 
     return NOT;
 }

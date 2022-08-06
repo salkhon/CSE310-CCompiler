@@ -753,6 +753,10 @@ unary_expression:
         write_log(production, $$);
     }
     | NOT unary_expression {
+        if ($2->get_semantic_type() == VOID_TYPE) {
+            write_error_log("Not operation cannot be performed on void type");
+        }
+        
         $$ = new SymbolInfo("!" + $2->get_symbol(), "unary_expression", INT_TYPE);
 
         string production = "unary_expression : NOT unary_expression";

@@ -34,6 +34,7 @@
     int current_stack_offset;
 
     vector<string> split(string, char = ' ');
+    string _get_var_ref(SymbolInfo*);
     bool is_sym_func(SymbolInfo*);
     bool is_func_sym_defined(SymbolInfo*);
     bool is_func_signatures_match(SymbolInfo*, SymbolInfo*);
@@ -321,7 +322,7 @@ declaration_list:
         $$ = nullptr;
     }
     | ID LTHIRD CONST_INT RTHIRD {
-        $1->set_semantic_type(INT_ARRAY_TYPE);
+        $1->set_semantic_type(INT_ARRAY_TYPE); // can do this because that's the only array type
         string var_name = $1->get_symbol();
         string size = $3->get_symbol();
 
@@ -398,114 +399,216 @@ variable:
         $$ = $1;
     }
     | ID LTHIRD expression RTHIRD {
-        vector<string> expression_code = $3->get_codegen_info_ptr()->get_all_code();
-
-        SymbolInfo* var_symptr = symbol_table.lookup($1->get_symbol());
-        CodeGenInfo* var_cgi_ptr = var_symptr->get_codegen_info_ptr();
-
-        vector<string> code{expression_code};
-        code.push_back("MOV DI, AX");
-        var_cgi_ptr->add_code(code);
-
-        // passes index up, now upper context needs to use that index accordingly, as l-value or r-value
-        $$ = new SymbolInfo(*var_symptr); 
+        // expression value on AX, since its an index, move it to SI
+        string code = "MOV SI, AX";
+        write_code(code, 1);
+        $$ = new SymbolInfo(*$1); 
     }
     ;
 
 expression: // TODO: fix
     logic_expression {
+        // expression value persists on AX
+        $$ = nullptr;
     }
     | variable ASSIGNOP logic_expression {
-        // l values of variable is needed. In that case $1 must have info about variable l val.
-        CodeGenInfo* var_cgi_ptr = $1->get_codegen_info_ptr();
-        vector<string> code;
-        if (var_cgi_ptr->is_local()) {
-            int stack_offset = var_cgi_ptr->get_stack_offset();
-            code.push_back("MOV [BP+" + to_string(stack_offset) + "], AX");
-        } else {
-            string var_name = $1->get_symbol();
-            code.push_back("MOV " + var_name + ", AX");
-        }
-        write_code(code);
+        // variable can be an array, if so, index is in SI.
+        SymbolInfo* var_sym_ptr = symbol_table.lookup($1->get_symbol());
+        string var_ref = _get_var_ref(var_sym_ptr);
+        string code = "MOV " + var_ref + ", AX";
+        write_code(code, 1);
+        // asigned value persists on AX, which is the value of the expression
+        $$ = nullptr;
     }
     ;
 
 logic_expression:
     rel_expression {
+        // expression value persists on AX
+        $$ = nullptr;
     }
-    | rel_expression LOGICOP rel_expression {
+    | rel_expression {
+        // make expression value persist
+        string code = "MOV BX, AX";
+        write_code(code, 1);
+    } LOGICOP rel_expression {
+        string code;
+        if ($3->get_symbol() == "&&") {
+            code = "AND AX, BX";
+        } else if ($3->get_symbol() == "||") {
+            code = "OR AX, BX";
+        }
+        write_code(code, 1);
     }
     ;
 
 rel_expression:
     simple_expression {
+        // expression value persists on AX
+        $$ = nullptr;
     }
-    | simple_expression RELOP simple_expression {
+    | simple_expression {
+        // make expression value persist
+        string code = "MOV BX, AX";
+        write_code(code, 1);
+    } RELOP simple_expression {
+        // second expression value in AX
+        string relop = $3->get_symbol();
+        vector<string> code = {"CMP BX, AX", "MOV AX, 0"};
+
+        if (relop == "<") {
+            code.push_back("SETG AL");
+        } else if (relop == "<=") {
+            code.push_back("SETGE AL");
+        } else if (relop == ">") {
+            code.push_back("SETL AL");
+        } else if (relop == ">=") {
+            code.push_back("SETLE AL");
+        } else if (relop == "==") {
+            code.push_back("SETE AL");
+        } else if (relop == "!=") {
+            code.push_back("SETNE AL");
+        }
+
+        $$ = nullptr;
     }
     ;
 
 simple_expression:
     term {
+        // value in AX persists
+        $$ = nullptr;
     }
-    | simple_expression ADDOP term {
+    | simple_expression {
+        string code = "MOV BX, AX";
+        write_code(code, 1);
+        $<syminfo_ptr>$ = nullptr;
+    } ADDOP term {
+        string addop = $4->get_symbol();
+        vector<string> code;
+        if (addop == "+") {
+            code.push_back("ADD AX, BX");
+        } else if (addop == "-") {
+            code.push_back("SUB BX, AX");
+            code.push_back("MOV AX, BX");
+        }
+        write_code(code, 1);
+
+        $$ = nullptr;
     }
     ;
 
 term:
     unary_expression {
     }
-    | term MULOP unary_expression {
+    | term {
+        string code = "MOV BX, AX";
+        write_code(code, 1);
+        $<syminfo_ptr>$ = nullptr;
+    } MULOP unary_expression {
+        string mulop = $3->get_symbol();
+        vector<string> code = {
+            "XOR AX, BX", 
+            "XOR BX, AX", 
+            "XOR AX, BX"
+        };
+
+        if (mulop == "*") {
+            code.push_back("IMUL BX"); // result in DX:AX, we'll take AX
+        } else if (mulop == "/") {
+            code.push_back("MOV DX, 0");
+            code.push_back("IDIV BX"); // AX quo, DX rem
+        } else if (mulop == "%") {
+            code.push_back("MOV DX, 0");
+            code.push_back("IDIV BX");
+            code.push_back("MOV AX, DX");
+        }
+        write_code(code, 1);
+
+        $$ = nullptr;
     }
     ;
 
 unary_expression:
     ADDOP unary_expression 
     %prec UNARY {
+        // expression value on AX persists.
+        $$ = nullptr;
     }
     | NOT unary_expression {
+        vector<string> code = {
+            "CMP AX, 0",
+            "MOV AX, 0", 
+            "SETE AL"
+        };
+        write_code(code, 1);
+        $$ = nullptr;
     }
     | factor {
+        // expression value on AX persists.
+        $$ = nullptr;
     }
     ;
 
 factor:
     variable {
-        // epxression evaluation will be done accumulatively in AX
-        SymbolInfo* var_syminfo_ptr = symbol_table.lookup($1->get_symbol());
-        vector<string> code;
-        if (var_syminfo_ptr->get_codegen_info_ptr()->is_local()) {
-            code.push_back(string("MOV AX, [BP + ") + to_string(var_syminfo_ptr->get_codegen_info_ptr()->get_stack_offset())
-                + "]");
-        } else {
-            code.push_back("MOV AX, " + var_syminfo_ptr->get_symbol());
-        }
-        write_code(code);
+        // when variable reduces to factor, it's symbol table info is no longer needed, just the value on AX. 
+        SymbolInfo* var_sym_ptr = symbol_table.lookup($1->get_symbol());
+        string var_ref = _get_var_ref(var_sym_ptr);
+        string code = "MOV AX, " + var_ref;
+        write_code(code, 1);
+        $$ = nullptr;
     }
     | ID LPAREN argument_list RPAREN {
+        // TODO: calling sequence, put result on AX
     }
     | LPAREN expression RPAREN {
+        // expression value in AX persists. 
+        $$ = nullptr;
     }
     | CONST_INT {
-        $$ = new SymbolInfo($1->get_symbol(), $1->get_token_type(), INT_TYPE);
+        string code = "MOV AX, " + $1->get_symbol();
+        write_code(code, 1);
+        $$ = nullptr;
     }
     | variable INCOP {
+        SymbolInfo* var_sym_ptr = symbol_table.lookup($1->get_symbol());
+        string var_ref = _get_var_ref(var_sym_ptr);
+        vector<string> code = {
+            "MOV AX, " + var_ref, 
+            "INC " + var_ref
+        };
+        write_code(code, 1);
+        $$ = nullptr;
     }
     | variable DECOP {
+        SymbolInfo* var_sym_ptr = symbol_table.lookup($1->get_symbol());
+        string var_ref = _get_var_ref(var_sym_ptr);
+        vector<string> code = {
+            "MOV AX, " + var_ref, 
+            "DEC " + var_ref
+        };
+        write_code(code, 1);
+        $$ = nullptr;
     }
     ;
 
 argument_list:
     arguments {
+        $$ = nullptr;
     }
     | %empty {
+        $$ = nullptr;
     }
     ;
 
 arguments:
     arguments COMMA logic_expression {
-        // push on stack here
+        // TODO: push on stack here, expression value on AX
+        string code = "PUSH AX";
     }
     | logic_expression {
+        string code = "PUSH AX";
     }
     ;
 
@@ -522,6 +625,26 @@ vector<string> split(string str, char delim) {
 
     return split_strs; 
 }
+
+string _get_var_ref(SymbolInfo* var_sym_ptr) {
+    string var_type = var_sym_ptr->get_semantic_type();
+    CodeGenInfo* var_cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
+    string var_ref;
+    if (var_cgi_ptr->is_local()) {
+        var_ref = "BP+" + var_cgi_ptr->get_stack_offset();
+        if (var_type == INT_ARRAY_TYPE) {
+            var_ref += "+SI"; // array index in SI from expression
+        }
+        var_ref = "[" + var_ref + "]";
+    } else {
+        var_ref = var_sym_ptr->get_symbol();
+        if (var_type == INT_ARRAY_TYPE) {
+            var_ref += "[SI]"; // array indec in SI from expression
+        }
+    }
+    return var_ref;
+}
+
 
 bool is_sym_func(SymbolInfo* syminfo) {
     return !syminfo->get_all_data().empty();
