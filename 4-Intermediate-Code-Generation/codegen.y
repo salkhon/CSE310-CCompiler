@@ -7,6 +7,7 @@
     #include <sstream>
     #include <vector>
     #include <algorithm>
+    #include <stack>
     #include "./symbol-table/include.hpp"
 
     using namespace std;
@@ -33,8 +34,29 @@
     vector<SymbolInfo*> params_for_func_scope;
     int current_stack_offset;
 
+    // number of label-requiring-statements encountered
+    int label_count = 0;
+    // depth of nested label-requiring-statements
+    int label_depth = 0;
+
+    const string FOR_LOOP_CONDITION_LABEL = "FOR_LOOP_CONDITION_";
+    const string FOR_LOOP_INCREMENT_LABEL = "FOR_LOOP_INCREMENT_";
+    const string FOR_LOOP_BODY_LABEL = "FOR_LOOP_BODY_";
+    const string FOR_LOOP_END_LABEL = "FOR_LOOP_END_";
+    const string WHILE_LOOP_CONDITION_LABEL = "WHILE_LOOP_CONDITION_";
+    const string WHILE_LOOP_BODY_LABEL = "WHILE_LOOP_BODY_";
+    const string WHILE_LOOP_END_LABEL = "WHILE_LOOP_END_";
+    const string IF_BODY_LABEL = "IF_BODY_";
+    const string IF_BODY_END_LABEL = "IF_BODY_END_";
+    const string ELSE_BODY_LABEL = "ELSE_BODY_";
+    const string ELSE_BODY_END_LABEL = "ELSE_BODY_END_";
+
+    const string IF_CONDITION_TEMP_NAME = "_if_temp"; // name will start with number to avoid collision with ID
+
     vector<string> split(string, char = ' ');
     string _get_var_ref(SymbolInfo*);
+    void _alloc_int_var(string);
+    void _alloc_int_array(string, int);
     bool is_sym_func(SymbolInfo*);
     bool is_func_sym_defined(SymbolInfo*);
     bool is_func_signatures_match(SymbolInfo*, SymbolInfo*);
@@ -48,6 +70,8 @@
 
 %union {
     SymbolInfo* syminfo_ptr;
+    // int will be used to keep track of labeled statements' opening and closing label in between nested statements
+    int int_val;
 }
 
 %token
@@ -61,7 +85,7 @@
     start program unit var_declaration func_definition type_specifier parameter_list
     compound_statement statements declaration_list statement expression_statement expression
     variable logic_expression rel_expression simple_expression term unary_expression factor argument_list
-    arguments func_declaration func_signature
+    arguments func_declaration func_signature if_condition
 
 %destructor {
     delete $$;
@@ -141,23 +165,23 @@ func_declaration:
     }
     ;
 
+/**
+    function call needs to push base pointer, and pop and set base pointer on return. 
+    Doing this on stack enables recursive calls. 
+    current_stack_pointer needn't be modified, because that's only relevant for code generation.
+**/
 func_definition:
     func_signature LCURL {
-        // we can safely write PROC here
-        // CALLER will push old fp, set new fp to current sp, push old stack offset, reset stack offset, 
-        // push return space, and param values. PROC just needs to reference them through current stack offset. 
-        // so at this point, we know, fp points to frame start, current stack offset is incremented by return space, 
-        // and all params. 
         insert_into_symtable(current_func_sym_ptr); // since we're not inserting in func def, no collision
 
         // symbol table insertions of parameters in new scope, var names are not available in calling sequence
-        int offset = 1; // return space
+        current_stack_offset = 0;
         symbol_table.enter_scope();
         for (SymbolInfo* param_symbol : params_for_func_scope) {
-            param_symbol->get_codegen_info_ptr()->set_stack_offset(offset++);
+            // base pointer is reset on on every call, so identifying local vars based on offset works
+            param_symbol->get_codegen_info_ptr()->set_stack_offset(current_stack_offset++);
             insert_into_symtable(param_symbol);
         }
-        current_stack_offset = offset; // useful when declaring local vars
         params_for_func_scope.clear();
 
         string func_name = current_func_sym_ptr->get_symbol();
@@ -230,6 +254,7 @@ parameter_list:
 compound_statement:
     LCURL {
         // this is nested scope
+        // no conflict with func_def because closure includes compound statement only after encountering statement non terminal.
         symbol_table.enter_scope();
     } statements RCURL {
         symbol_table.exit_scope();
@@ -248,99 +273,35 @@ compound_statement:
 
 var_declaration:
     type_specifier declaration_list SEMICOLON {
-        // type is int for our language. The only distinction is make is int vs int[]
+        // allocation done for each variable on declaration_list
+        $$ = nullptr;
     }
     ;
 type_specifier:
     INT {
+        // necessary for instantiating current_func_sym_ptr in func_signature
+        $$ = new SymbolInfo(INT_TYPE, INT_TYPE);
     }
     | VOID {
+        $$ = new SymbolInfo(VOID_TYPE, VOID_TYPE);
     }
     ;
 
 declaration_list:
     declaration_list COMMA ID {
-        $3->set_semantic_type(INT_TYPE); // can do this because that's the only type
-        string var_name = $3->get_symbol();
-
-        if (current_func_sym_ptr == nullptr) {
-            // global
-            string code = var_name + " DW 0";
-            // write data segment code at the end
-            globals.push_back(new SymbolInfo(*$3)); // .clear() calls delete
-        } else {
-            // local
-            string code = "PUSH 0";
-            CodeGenInfo* codegeninfoptr = $3->get_codegen_info_ptr();
-            codegeninfoptr->set_stack_offset(current_stack_offset++);
-            write_code(code);
-        }
-
-        insert_into_symtable($3);
+        _alloc_int_var($3->get_symbol());
         $$ = nullptr;
     }
     | declaration_list COMMA ID LTHIRD CONST_INT RTHIRD {
-        $3->set_semantic_type(INT_ARRAY_TYPE);
-        string var_name = $3->get_symbol();
-        string size = $5->get_symbol();
-
-        if (current_func_sym_ptr == nullptr) {
-            // global
-            string code = var_name + " DW " + size + " DUP(0)";
-            $1->add_data(size); // storing array size on symbol data[]
-            globals.push_back($3);
-        } else {
-            // local
-            int size_int = stoi(size);
-            vector<string> code(size_int, "PUSH 0");
-            $3->get_codegen_info_ptr()->set_stack_offset(current_stack_offset);
-            current_stack_offset += size_int;
-            write_code(code);
-        }
-
-        insert_into_symtable($3);
+        _alloc_int_array($3->get_symbol(), stoi($5->get_symbol()));
         $$ = nullptr;
-
     }
     | ID {
-        $1->set_semantic_type(INT_TYPE); // can do this because that's the only type
-        string var_name = $1->get_symbol();
-
-        if (current_func_sym_ptr == nullptr) {
-            // global
-            string code = var_name + " DW 0";
-            globals.push_back(new SymbolInfo(*$1)); // .clear() calls delete
-        } else {
-            // local
-            string code = "PUSH 0";
-            CodeGenInfo* codegeninfoptr = $1->get_codegen_info_ptr();
-            codegeninfoptr->set_stack_offset(current_stack_offset++);
-            write_code(code);
-        }
-
-        insert_into_symtable($1);
+        _alloc_int_var($1->get_symbol());
         $$ = nullptr;
     }
     | ID LTHIRD CONST_INT RTHIRD {
-        $1->set_semantic_type(INT_ARRAY_TYPE); // can do this because that's the only array type
-        string var_name = $1->get_symbol();
-        string size = $3->get_symbol();
-
-        if (current_func_sym_ptr == nullptr) {
-            // global
-            string code = var_name + " DW " + size + " DUP(0)";
-            $1->add_data(size); // storing array size on symbol data[]
-            globals.push_back($1);
-        } else {
-            // local
-            int size_int = stoi(size);
-            vector<string> code(size_int, "PUSH 0");
-            $1->get_codegen_info_ptr()->set_stack_offset(current_stack_offset);
-            current_stack_offset += size_int;
-            write_code(code);
-        }
-
-        insert_into_symtable($1);
+        _alloc_int_array($1->get_symbol(), stoi($3->get_symbol()));
         $$ = nullptr;
     }
     ;
@@ -354,19 +315,113 @@ statements:
 
 statement:
     var_declaration {
+        $$ = nullptr;
     }
     | expression_statement {
+        $$ = nullptr;
     }
     | compound_statement {
+        $$ = nullptr;
     }
-    | FOR LPAREN expression_statement expression_statement expression RPAREN statement {
+    | FOR LPAREN expression_statement {
+        // expression code written, value stored on AX (assignment mostly)
+        // need label to comeback to following condition checking expression
+        string code = FOR_LOOP_CONDITION_LABEL + to_string(label_count) + ":";
+        // $$ will be used as a statement ID, so we can label corresponding opening and closing labels with same id
+        write_code(code, label_depth);
+
+        $<int_val>$ = label_count; 
+    } expression_statement {
+        // conditional statement value in AX, code written
+        string current_for_id = to_string($<int_val>4);
+        string for_loop_body_label = FOR_LOOP_BODY_LABEL + current_for_id;
+        string for_loop_end_label = FOR_LOOP_END_LABEL + current_for_id;
+        string for_loop_increment_label = FOR_LOOP_INCREMENT_LABEL + current_for_id;
+        vector<string> code{
+            "CMP AX, 0", 
+            "JNE " + for_loop_body_label, 
+            "JMP " + for_loop_end_label,
+            for_loop_increment_label + ":"
+        };
+        write_code(code, label_depth);
+
+        $<int_val>$ = $<int_val>4;
+    } expression RPAREN {
+        // expression val in AX, mostly assignment
+        string current_for_id = to_string($<int_val>6);
+        string for_loop_condition_label = FOR_LOOP_CONDITION_LABEL + current_for_id;
+        string for_loop_body_label = FOR_LOOP_BODY_LABEL + current_for_id;
+        vector<string> code{
+            "JMP " + for_loop_condition_label,
+            for_loop_body_label + ":"
+        };
+        label_count++;
+        write_code(code, label_depth++);
+
+        $<int_val>$ = $<int_val>6;
+    } statement {
+        // all statement codes are writted, including nested loops, need to pop label stack
+        string current_for_id = to_string($<int_val>9);
+        string for_loop_increment_label = FOR_LOOP_INCREMENT_LABEL + current_for_id;
+        string for_loop_end_label = FOR_LOOP_END_LABEL + current_for_id;
+        vector<string> code{
+            "JMP " + for_loop_increment_label, 
+            for_loop_end_label + ":"
+        };
+        write_code(code, --label_depth);
     }
-    | IF LPAREN expression RPAREN statement 
+    | if_condition statement 
     %prec SHIFT_ELSE {
+        string code = IF_BODY_END_LABEL + to_string($<int_val>1) + ":";
+        write_code(code, --label_depth);
     } 
-    | IF LPAREN expression RPAREN statement ELSE statement {
+    | if_condition statement ELSE {
+        string current_if_else_id = to_string($<int_val>1);
+        string if_temp_name = current_if_else_id + IF_CONDITION_TEMP_NAME;
+        string if_temp_ref = _get_var_ref(symbol_table.lookup(if_temp_name));
+        string else_body_label = ELSE_BODY_LABEL + current_if_else_id;
+        string else_body_end_label = ELSE_BODY_END_LABEL + current_if_else_id;
+        vector<string> code{
+            "CMP " + if_temp_ref + ", 0",
+            "JE " + else_body_label, 
+            "JMP " + else_body_end_label,
+            else_body_label + ":"
+        };
+        write_code(code, label_depth-1);
+
+        $<int_val>$ = $<int_val>1;
+    } statement {
+        string code = ELSE_BODY_END_LABEL + to_string($<int_val>4) + ":";
+        write_code(code, --label_depth);
     }
-    | WHILE LPAREN expression RPAREN statement {
+    | WHILE LPAREN {
+        string code = WHILE_LOOP_CONDITION_LABEL + to_string(label_count) + ":";
+        write_code(code, label_depth);
+
+        $<int_val>$ = label_count;
+    } expression RPAREN {
+        string current_while_id = to_string($<int_val>3);
+        string while_loop_body_label = WHILE_LOOP_BODY_LABEL + current_while_id;
+        string while_loop_end_label = WHILE_LOOP_END_LABEL + current_while_id;
+        vector<string> code{
+            "CMP AX, 0", 
+            "JNE " + while_loop_body_label, 
+            "JMP " + while_loop_end_label, 
+            while_loop_body_label + ":"
+        };
+        label_count++;
+        write_code(code, label_depth++);
+
+        $<int_val>$ = $<int_val>3;
+    } statement {
+        string current_while_id = to_string($<int_val>6);
+        string while_loop_condition_label = WHILE_LOOP_CONDITION_LABEL + current_while_id;
+        string while_loop_end_label = WHILE_LOOP_END_LABEL + current_while_id;
+        vector<string> code{
+            "JMP " + while_loop_condition_label, 
+            while_loop_end_label + ":"
+        };
+        write_code(code, --label_depth);
     }
     | PRINTLN LPAREN variable RPAREN SEMICOLON {
     }
@@ -374,10 +429,34 @@ statement:
     }
     ;
 
+if_condition:
+    IF LPAREN expression RPAREN {
+        // expression value needs to be stored for ELSE to determine if it should execute, and it has to 
+        // be done at run time, and can have nesting. So we allocate a temp variable in the symbol table. 
+        string current_if_id = to_string(label_count);
+        string if_temp_name = current_if_id + IF_CONDITION_TEMP_NAME;
+        _alloc_int_var(if_temp_name);
+        string var_asm_ref = _get_var_ref(symbol_table.lookup(if_temp_name)); 
+        string if_body_label = IF_BODY_LABEL + current_if_id;
+        string if_body_end_label = IF_BODY_END_LABEL + current_if_id;
+        vector<string> code{
+            "MOV " + var_asm_ref + ", AX", 
+            "CMP AX, 0", 
+            "JNE " + if_body_label, 
+            "JMP " + if_body_end_label, 
+            if_body_label + ":"
+        };
+        write_code(code, label_depth++);
+
+        $<int_val>$ = label_count++;
+    }
+
 expression_statement:
     SEMICOLON {
+        $$ = nullptr;
     }
     | expression SEMICOLON {
+        $$ = nullptr;
     }
     ;
 
@@ -406,7 +485,7 @@ variable:
     }
     ;
 
-expression: // TODO: fix
+expression:
     logic_expression {
         // expression value persists on AX
         $$ = nullptr;
@@ -500,6 +579,8 @@ simple_expression:
 
 term:
     unary_expression {
+        // expression value persists on AX
+        $$ = nullptr;
     }
     | term {
         string code = "MOV BX, AX";
@@ -511,7 +592,7 @@ term:
             "XOR AX, BX", 
             "XOR BX, AX", 
             "XOR AX, BX"
-        };
+        }; // getting the MULOP order right
 
         if (mulop == "*") {
             code.push_back("IMUL BX"); // result in DX:AX, we'll take AX
@@ -626,6 +707,12 @@ vector<string> split(string str, char delim) {
     return split_strs; 
 }
 
+/**
+    Resolves the identifier of a variable in assembly, based on if it's local or global and if it's an array or 
+    not. 
+    @param var_sym_ptr Pointer to the SymbolInfo of the variable whose identifier needs to be resolved.
+    @return string Identifier that can be included in assembly code
+**/
 string _get_var_ref(SymbolInfo* var_sym_ptr) {
     string var_type = var_sym_ptr->get_semantic_type();
     CodeGenInfo* var_cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
@@ -645,6 +732,56 @@ string _get_var_ref(SymbolInfo* var_sym_ptr) {
     return var_ref;
 }
 
+/**
+    Writes allocation asm code of int variable into code_file based on if the variable is a local or global. 
+    Also inserts new symbol for the allocated variable in the symbol table.
+    @param var_name name of the variable to be allocated  
+**/
+void _alloc_int_var(string var_name) {
+    SymbolInfo* var_sym_ptr = new SymbolInfo(var_name, "ID", INT_TYPE); // can do this because that's the only type
+
+    if (current_func_sym_ptr == nullptr) {
+        // global
+        string code = var_name + " DW 0";
+        // write data segment code at the end
+        globals.push_back(new SymbolInfo(*var_sym_ptr)); // .clear() calls delete
+    } else {
+        // local
+        string code = "PUSH 0";
+        CodeGenInfo* cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
+        cgi_ptr->set_stack_offset(current_stack_offset++);
+        write_code(code, 1);
+    }
+
+    insert_into_symtable(var_sym_ptr);
+    delete var_sym_ptr;
+}
+
+/**
+    Writes allocation asm code of int array into code_file based on if the array is a local or global. 
+    Also inserts new symbol for the allocated array in the symbol table.
+    @param arr_name name of the array to be allocated  
+    @param arr_size size of the array
+**/
+void _alloc_int_array(string arr_name, int arr_size) {
+    string arr_sz_str = to_string(arr_size);
+    SymbolInfo* arr_sym_ptr = new SymbolInfo(arr_name, "ID", INT_ARRAY_TYPE, { arr_sz_str });
+
+    if (current_func_sym_ptr == nullptr) {
+        // global
+        string code = arr_name + " DW " + arr_sz_str + " DUP(0)";
+        globals.push_back(new SymbolInfo(*arr_sym_ptr));
+    } else {
+        // local
+        vector<string> code(arr_size, "PUSH 0");
+        arr_sym_ptr->get_codegen_info_ptr()->set_stack_offset(current_stack_offset);
+        current_stack_offset += arr_size;
+        write_code(code, 1);
+    }
+
+    insert_into_symtable(arr_sym_ptr);
+    delete arr_sym_ptr;
+}
 
 bool is_sym_func(SymbolInfo* syminfo) {
     return !syminfo->get_all_data().empty();
