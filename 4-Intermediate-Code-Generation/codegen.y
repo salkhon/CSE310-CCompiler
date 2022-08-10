@@ -186,7 +186,7 @@ func_definition:
 
         string func_name = current_func_sym_ptr->get_symbol();
         string code = func_name + " PROC";
-        write_code(code);
+        write_code(code, label_depth++);
 
         $<syminfo_ptr>$ = nullptr;
     } statements RCURL {
@@ -194,7 +194,7 @@ func_definition:
         current_func_sym_ptr = nullptr;
 
         string code = "ENDP";
-        write_code(code);
+        write_code(code, --label_depth);
         
         $$ = nullptr;
     }
@@ -257,6 +257,7 @@ compound_statement:
         // no conflict with func_def because closure includes compound statement only after encountering statement non terminal.
         symbol_table.enter_scope();
     } statements RCURL {
+        vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
         symbol_table.exit_scope();
     }
     | LCURL RCURL {
@@ -424,8 +425,20 @@ statement:
         write_code(code, --label_depth);
     }
     | PRINTLN LPAREN variable RPAREN SEMICOLON {
+        SymbolInfo* var_sym = symbol_table.lookup($3->get_symbol());
+        string var_ref = _get_var_ref(var_sym);
+        vector<string> code{
+            "MOV AX, " + var_ref, 
+            "CALL PRINT_INT_IN_AX" // TODO: add to code
+        };
+        write_code(code, label_depth);
     }
     | RETURN expression SEMICOLON {
+        // return expression already in AX, pop parameters and locals off stack.
+        // everything on the current scope is a parameter or a local, just pop x sizeof currentscope
+        vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
+        code.push_back("RET");
+        write_code(code, label_depth);
     }
     ;
 
@@ -489,7 +502,7 @@ expression:
     logic_expression {
         // expression value persists on AX
         $$ = nullptr;
-    }
+    }   
     | variable ASSIGNOP logic_expression {
         // variable can be an array, if so, index is in SI.
         SymbolInfo* var_sym_ptr = symbol_table.lookup($1->get_symbol());
@@ -888,3 +901,8 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
+/**
+    x86 assembly instructions: http://www.mathemainzel.info/files/x86asmref.html#idiv
+    x86 assembly registers: https://www.eecg.utoronto.ca/~amza/www.mindsec.com/files/x86regs.html#:~:text=The%20main%20tools%20to%20write,the%20process%20faster%20and%20cleaner.
+**/

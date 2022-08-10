@@ -17,6 +17,7 @@ class ScopeTable;
 class SymbolInfoHashTable {
     const int total_buckets;
     vector<SymbolInfo*> table;
+    int size;
 public:
     ScopeTable* enclosing_scope_table_ptr;
 
@@ -25,6 +26,8 @@ public:
     ~SymbolInfoHashTable();
 
     int get_num_buckets();
+
+    int get_size();
 
     bool insert(const string&, const string&);
 

@@ -158,6 +158,15 @@ SymbolInfo* SymbolTable::lookup(const string& symbol) {
     return target;
 }
 
+/**
+ * @brief Returns the number of entries in the current scope-table. 
+ * 
+ * @return int number of entries in the current scope-table. 
+ */
+int SymbolTable::get_current_scope_size() {
+    return this->current_scope_table->get_size();
+}
+
 ostream& operator<<(ostream& ostrm, SymbolTable& symbol_table) {
     ostrm << "==========================Symbol Table==================================\n";
     for (auto rev_iter = symbol_table.scope_tables.rbegin(); rev_iter != symbol_table.scope_tables.rend(); rev_iter++) {

@@ -38,6 +38,8 @@ public:
 
     int get_current_id();
 
+    int get_size();
+
     bool insert(const string&, const string&);
 
     bool insert(const string&, const string&, string&);

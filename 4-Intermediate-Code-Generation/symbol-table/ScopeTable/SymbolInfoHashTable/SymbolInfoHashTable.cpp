@@ -7,7 +7,7 @@ namespace printing_info {
 }
 
 SymbolInfoHashTable::SymbolInfoHashTable(const int total_buckets)
-    : total_buckets(total_buckets), table(total_buckets, nullptr) {}
+    : total_buckets(total_buckets), table(total_buckets, nullptr), size{0} {}
 
 void _delete_chain(SymbolInfo* const chain_root) {
     SymbolInfo* current = chain_root;
@@ -43,6 +43,10 @@ int SymbolInfoHashTable::get_num_buckets() {
     return this->total_buckets;
 }
 
+int SymbolInfoHashTable::get_size() {
+    return this->size;
+}
+
 void _insert_at_the_end_of_chain(SymbolInfo* const insertion, vector<SymbolInfo*>& table, int bucket) {
     SymbolInfo* current_sym_info = table[bucket];
 
@@ -67,6 +71,7 @@ bool SymbolInfoHashTable::insert(const string& symbol, const string& token_type)
     if (collision == nullptr) {
         SymbolInfo* insertion = new SymbolInfo(symbol, token_type);
         _insert_at_the_end_of_chain(insertion, this->table, bucket);
+        this->size++;
         return true;
     } else {
         return false;
@@ -80,6 +85,7 @@ bool SymbolInfoHashTable::insert(const string& symbol, const string& token_type,
     if (collision == nullptr) {
         SymbolInfo* insertion = new SymbolInfo(symbol, token_type, semantic_type);
         _insert_at_the_end_of_chain(insertion, this->table, bucket);
+        this->size++;
         return true;
     } else {
         return false;
@@ -94,6 +100,7 @@ bool SymbolInfoHashTable::insert(const string& symbol, const string& token_type,
     if (collision == nullptr) {
         SymbolInfo* insertion = new SymbolInfo(symbol, token_type, semantic_type, data);
         _insert_at_the_end_of_chain(insertion, this->table, bucket);
+        this->size++;
         return true;
     } else {
         return false;
@@ -107,6 +114,7 @@ bool SymbolInfoHashTable::insert_copy(SymbolInfo* syminfo_ptr) {
     if (collision == nullptr) {
         SymbolInfo* insertion = new SymbolInfo(*syminfo_ptr);
         _insert_at_the_end_of_chain(insertion, this->table, bucket);
+        this->size++;
         return true;
     } else {
         return false;
@@ -155,6 +163,10 @@ bool SymbolInfoHashTable::delete_symbolinfo(const string& symbol) {
             is_successful_delete = true;
             printing_info::_chain_index = idx;
         }
+    }
+
+    if (is_successful_delete) {
+        this->size--;
     }
 
     return is_successful_delete;

@@ -127,6 +127,10 @@ int ScopeTable::get_current_id() {
     return this->current_id;
 }
 
+int ScopeTable::get_size() {
+    return this->hashtable->get_size();
+}
+
 void ScopeTable::print() {
     const string INDENT = "\t";
     cout << endl;

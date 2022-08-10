@@ -38,5 +38,7 @@ public:
 
     SymbolInfo* lookup(const string&);
 
+    int get_current_scope_size();
+
     friend ostream& operator<<(ostream&, SymbolTable&);
 };
