@@ -107,7 +107,7 @@ LTHIRD "["
 RTHIRD "]"
 COMMA ","
 SEMICOLON ";"
-PRINTLN "println"
+PRINTLN "println"|"printf"
 
 ALPHABET [a-zA-Z]
 
