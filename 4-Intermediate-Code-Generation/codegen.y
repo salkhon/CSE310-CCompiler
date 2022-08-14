@@ -22,6 +22,8 @@
     FILE* input_file,* code_file,* optim_code_file;
 
     const int SYM_TABLE_BUCKETS = 10;
+
+    // only needed for code generation, referring to local variables with corresponding offset assigned
     SymbolTable symbol_table(SYM_TABLE_BUCKETS);
 
     const string INT_TYPE = "int";
@@ -39,21 +41,13 @@
     // depth of nested label-requiring-statements
     int label_depth = 0;
 
-    const string FOR_LOOP_CONDITION_LABEL = "FOR_LOOP_CONDITION_";
-    const string FOR_LOOP_INCREMENT_LABEL = "FOR_LOOP_INCREMENT_";
-    const string FOR_LOOP_BODY_LABEL = "FOR_LOOP_BODY_";
-    const string FOR_LOOP_END_LABEL = "FOR_LOOP_END_";
-    const string WHILE_LOOP_CONDITION_LABEL = "WHILE_LOOP_CONDITION_";
-    const string WHILE_LOOP_BODY_LABEL = "WHILE_LOOP_BODY_";
-    const string WHILE_LOOP_END_LABEL = "WHILE_LOOP_END_";
-    const string IF_BODY_LABEL = "IF_BODY_";
-    const string IF_BODY_END_LABEL = "IF_BODY_END_";
-    const string ELSE_BODY_LABEL = "ELSE_BODY_";
-    const string ELSE_BODY_END_LABEL = "ELSE_BODY_END_";
-
-    const string IF_CONDITION_TEMP_NAME = "_if_temp"; // name will start with number to avoid collision with ID
+    enum Label {
+        FOR_LOOP_CONDITION, FOR_LOOP_INCREMENT, FOR_LOOP_BODY, FOR_LOOP_END, WHILE_LOOP_CONDITION, 
+        WHILE_LOOP_BODY, WHILE_LOOP_END, IF_BODY, ELSE_BODY, IF_ELSE_END
+    };
 
     vector<string> split(string, char = ' ');
+    string get_label(Label, int=-1);
     string _get_var_ref(SymbolInfo*);
     void _alloc_int_var(string);
     void _alloc_int_array(string, int);
@@ -285,6 +279,34 @@ statements:
     | statements statement {}
     ;
 
+/**
+    Surprisingly, this if-else grammar automatically covers if-elseif ladder. Because if-elseif ladders
+    can be broken down to nested if-else s.
+        if (A) {
+
+        } else if (B) {
+
+        } else if (C) {
+
+        } else {
+
+        }
+    To, 
+        if (A) {
+
+        } else {
+            if (B) {
+
+            } else {
+                if (C) {
+
+                } else {
+
+                }
+            }
+        }
+    If one of the if condition enters, no else-ifs enter. Amazing. 
+**/
 statement:
     var_declaration {}
     | expression_statement {}
@@ -292,100 +314,93 @@ statement:
     | FOR LPAREN expression_statement {
         // expression code written, value stored on AX (assignment mostly)
         // need label to comeback to following condition checking expression
-        string code = FOR_LOOP_CONDITION_LABEL + to_string(label_count) + ":";
-        // $S will be used as a statement indentifier, so we can label corresponding opening and closing labels with same id
+        vector<string> code{
+            "; FOR LOOP START", 
+            get_label(FOR_LOOP_CONDITION) + ":"
+        };
+        // $S will be used as a label identifier, so we can label corresponding opening and closing labels with same id
         write_code(code, label_depth);
 
-        $<int_val>$ = label_count; 
+        $<int_val>$ = label_count - 1; 
     } expression_statement {
         // conditional statement value in AX, code written
-        string current_for_id = to_string($<int_val>4);
-        string for_loop_body_label = FOR_LOOP_BODY_LABEL + current_for_id;
-        string for_loop_end_label = FOR_LOOP_END_LABEL + current_for_id;
-        string for_loop_increment_label = FOR_LOOP_INCREMENT_LABEL + current_for_id;
+        const int CURR_LABEL_ID = $<int_val>4;
         vector<string> code{
+            "; FOR LOOP CONDITION CHECK",
             "CMP AX, 0", 
-            "JNE " + for_loop_body_label, 
-            "JMP " + for_loop_end_label,
-            for_loop_increment_label + ":"
+            "JNE " + get_label(FOR_LOOP_BODY, CURR_LABEL_ID), 
+            "JMP " + get_label(FOR_LOOP_END, CURR_LABEL_ID),
+            get_label(FOR_LOOP_INCREMENT, CURR_LABEL_ID) + ":"
         };
         write_code(code, label_depth);
 
         $<int_val>$ = $<int_val>4;
     } expression RPAREN {
         // expression val in AX, mostly assignment
-        string current_for_id = to_string($<int_val>6);
-        string for_loop_condition_label = FOR_LOOP_CONDITION_LABEL + current_for_id;
-        string for_loop_body_label = FOR_LOOP_BODY_LABEL + current_for_id;
+        const int CURR_LABEL_ID = $<int_val>6;
         vector<string> code{
-            "JMP " + for_loop_condition_label,
-            for_loop_body_label + ":"
+            "JMP " + get_label(FOR_LOOP_CONDITION, CURR_LABEL_ID),
+            get_label(FOR_LOOP_BODY, CURR_LABEL_ID) + ":"
         };
-        label_count++;
         write_code(code, label_depth++);
 
         $<int_val>$ = $<int_val>6;
     } statement {
-        // all statement codes are writted, including nested loops, need to pop label stack
-        string current_for_id = to_string($<int_val>9);
-        string for_loop_increment_label = FOR_LOOP_INCREMENT_LABEL + current_for_id;
-        string for_loop_end_label = FOR_LOOP_END_LABEL + current_for_id;
+        const int CURR_LABEL_ID = $<int_val>9;
         vector<string> code{
-            "JMP " + for_loop_increment_label, 
-            for_loop_end_label + ":"
+            "JMP " + get_label(FOR_LOOP_INCREMENT, CURR_LABEL_ID), 
+            get_label(FOR_LOOP_END, CURR_LABEL_ID) + ":"
         };
         write_code(code, --label_depth);
     }
     | if_condition statement 
     %prec SHIFT_ELSE {
-        string code = IF_BODY_END_LABEL + to_string($<int_val>1) + ":";
+        const int CURR_LABEL_ID = $<int_val>1;
+        vector<string> code{
+            get_label(ELSE_BODY, CURR_LABEL_ID) + ":", // if_condition always assumes if-else, so dummy else label
+            get_label(IF_ELSE_END, CURR_LABEL_ID) + ":"
+        };
         write_code(code, --label_depth);
     } 
     | if_condition statement ELSE {
-        string current_if_else_id = to_string($<int_val>1);
-        string if_temp_name = current_if_else_id + IF_CONDITION_TEMP_NAME;
-        string if_temp_ref = _get_var_ref(symbol_table.lookup(if_temp_name));
-        string else_body_label = ELSE_BODY_LABEL + current_if_else_id;
-        string else_body_end_label = ELSE_BODY_END_LABEL + current_if_else_id;
+        const int CURR_LABEL_ID = $<int_val>1;
         vector<string> code{
-            "CMP " + if_temp_ref + ", 0",
-            "JE " + else_body_label, 
-            "JMP " + else_body_end_label,
-            else_body_label + ":"
+            "JMP " + get_label(IF_ELSE_END, CURR_LABEL_ID), // if body execution ends in jumping over else body
+            get_label(ELSE_BODY, CURR_LABEL_ID) + ":"
         };
         write_code(code, label_depth-1);
 
         $<int_val>$ = $<int_val>1;
     } statement {
-        string code = ELSE_BODY_END_LABEL + to_string($<int_val>4) + ":";
+        const int CURR_LABEL_ID = $<int_val>4;
+        string code = get_label(IF_ELSE_END, CURR_LABEL_ID) + ":";
         write_code(code, --label_depth);
     }
     | WHILE LPAREN {
-        string code = WHILE_LOOP_CONDITION_LABEL + to_string(label_count) + ":";
+        vector<string> code{
+            "; WHILE LOOP START",
+            get_label(WHILE_LOOP_CONDITION) + ":"
+        };
         write_code(code, label_depth);
 
-        $<int_val>$ = label_count;
+        $<int_val>$ = label_count - 1;
     } expression RPAREN {
-        string current_while_id = to_string($<int_val>3);
-        string while_loop_body_label = WHILE_LOOP_BODY_LABEL + current_while_id;
-        string while_loop_end_label = WHILE_LOOP_END_LABEL + current_while_id;
+        const int CURR_LABEL_ID = $<int_val>3;
         vector<string> code{
+            "; WHILE LOOP CONDITION CHECK",
             "CMP AX, 0", 
-            "JNE " + while_loop_body_label, 
-            "JMP " + while_loop_end_label, 
-            while_loop_body_label + ":"
+            "JNE " + get_label(WHILE_LOOP_BODY, CURR_LABEL_ID), 
+            "JMP " + get_label(WHILE_LOOP_END, CURR_LABEL_ID), 
+            get_label(WHILE_LOOP_BODY, CURR_LABEL_ID) + ":"
         };
-        label_count++;
         write_code(code, label_depth++);
 
         $<int_val>$ = $<int_val>3;
     } statement {
-        string current_while_id = to_string($<int_val>6);
-        string while_loop_condition_label = WHILE_LOOP_CONDITION_LABEL + current_while_id;
-        string while_loop_end_label = WHILE_LOOP_END_LABEL + current_while_id;
+        const int CURR_LABEL_ID = $<int_val>6;
         vector<string> code{
-            "JMP " + while_loop_condition_label, 
-            while_loop_end_label + ":"
+            "JMP " + get_label(WHILE_LOOP_CONDITION, CURR_LABEL_ID), 
+            get_label(WHILE_LOOP_END, CURR_LABEL_ID) + ":"
         };
         write_code(code, --label_depth);
     }
@@ -393,6 +408,7 @@ statement:
         SymbolInfo* var_sym = symbol_table.lookup($3->get_symbol());
         string var_ref = _get_var_ref(var_sym);
         vector<string> code{
+            "; PRINT STATEMENT", 
             "MOV AX, " + var_ref, 
             "CALL PRINT_INT_IN_AX"
         };
@@ -402,6 +418,8 @@ statement:
         // return expression already in AX, pop parameters and locals off stack.
         // everything on the current scope is a parameter or a local, just pop x sizeof currentscope
         vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
+        code.insert(code.begin(), "; ACTIVATION RECORD TEAR DOWN FOR FUNCTION " 
+            + current_func_sym_ptr->get_symbol());
         code.push_back("RET");
         write_code(code, label_depth);
     }
@@ -409,24 +427,17 @@ statement:
 
 if_condition:
     IF LPAREN expression RPAREN {
-        // expression value needs to be stored for ELSE to determine if it should execute, and it has to 
-        // be done at run time, and can have nesting. So we allocate a temp variable in the symbol table. 
-        string current_if_id = to_string(label_count);
-        string if_temp_name = current_if_id + IF_CONDITION_TEMP_NAME;
-        _alloc_int_var(if_temp_name);
-        string var_asm_ref = _get_var_ref(symbol_table.lookup(if_temp_name)); 
-        string if_body_label = IF_BODY_LABEL + current_if_id;
-        string if_body_end_label = IF_BODY_END_LABEL + current_if_id;
+        // if_condition assumes if-else. If condition is false, jump to ELSE_BODY label, which will exist for
+        // if without else as a dummy. 
         vector<string> code{
-            "MOV " + var_asm_ref + ", AX", 
+            "; IF STATEMENT START",
             "CMP AX, 0", 
-            "JNE " + if_body_label, 
-            "JMP " + if_body_end_label, 
-            if_body_label + ":"
+            "JNE " + get_label(IF_BODY),
+            "JMP " + get_label(ELSE_BODY, label_count-1),
         };
         write_code(code, label_depth++);
 
-        $<int_val>$ = label_count++;
+        $<int_val>$ = label_count - 1;
     }
 
 expression_statement:
@@ -466,7 +477,7 @@ expression:
         SymbolInfo* var_sym_ptr = symbol_table.lookup($1->get_symbol());
         string var_ref = _get_var_ref(var_sym_ptr);
         string code = "MOV " + var_ref + ", AX";
-        write_code(code, 1);
+        write_code(code, label_depth);
     }
     ;
 
@@ -600,7 +611,9 @@ factor:
     | ID LPAREN {
         // the code for the procedure we are calling is independent, written with its own current_stack_offset, 
         // which we don't need
+        string func_name = $1->get_symbol();
         vector<string> code{
+            "; ACTIVATION RECORD SETUP FOR FUNCTION " + func_name,
             "PUSH BP", 
             "MOV BP, SP"
         };
@@ -609,7 +622,8 @@ factor:
         string func_name = $1->get_symbol();
         vector<string> code{
             "CALL " + func_name, 
-            "POP BP"
+            "POP BP", 
+            "; EXECUTION COMPLETE FOR FUNCTION " + func_name
         };
         write_code(code, label_depth);
     }
@@ -704,6 +718,56 @@ vector<string> split(string str, char delim) {
 }
 
 /**
+    Generates label, with new id if label id is not provided or with provided id otherwise. 
+    If new label is generated, global label_count is incremented. 
+
+    @param Label Label type to generate
+    @param label_id Label id to append after label name
+    @return The label string with id appended
+**/
+string get_label(Label label, int label_id) {
+    if (label_id < 0) {
+        label_id = label_count++; // no label_id provided, generate new label_id
+    }
+
+    string label_str;
+    switch(label) {
+        case FOR_LOOP_CONDITION:
+            label_str = "FOR_LOOP_CND_";
+            break;
+        case FOR_LOOP_INCREMENT:
+            label_str = "FOR_LOOP_INC_";
+            break;
+        case FOR_LOOP_BODY:
+            label_str = "FOR_LOOP_BODY_";
+            break;
+        case FOR_LOOP_END:
+            label_str = "FOR_LOOP_END_";
+            break;
+        case WHILE_LOOP_CONDITION:
+            label_str = "WHILE_LOOP_CND_";
+            break;
+        case WHILE_LOOP_BODY:
+            label_str = "WHILE_LOOP_BODY_";
+            break;
+        case WHILE_LOOP_END:
+            label_str = "WHILE_LOOP_END_";
+            break;
+        case IF_BODY:
+            label_str = "IF_BODY_";
+            break;
+        case ELSE_BODY:
+            label_str = "ELSE_BODY_";
+            break;
+        case IF_ELSE_END:
+            label_str = "IF_ELSE_END_";
+            break;
+    }
+
+    return label_str + to_string(label_id);
+}
+
+/**
     Resolves the identifier of a variable in assembly, based on if it's local or global and if it's an array or 
     not. 
 
@@ -746,7 +810,10 @@ void _alloc_int_var(string var_name) {
         globals.push_back(new SymbolInfo(*var_sym_ptr)); // .clear() calls delete
     } else {
         // local
-        string code = "PUSH 0";
+        vector<string> code{
+            "; INITIALIZING BASIC VARIABLE " + var_name + " at stack offset " + to_string(current_stack_offset), 
+            "PUSH 0"
+        };
         CodeGenInfo* cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
         cgi_ptr->set_stack_offset(current_stack_offset++);
         write_code(code, 1);
@@ -774,6 +841,8 @@ void _alloc_int_array(string arr_name, int arr_size) {
     } else {
         // local
         vector<string> code(arr_size, "PUSH 0");
+        code.insert(code.begin(), "; INTIALIZING ARRAY VARIABLE " + arr_name + "[" + arr_sz_str + "]" + 
+            " at stack offset " + to_string(current_stack_offset));
         arr_sym_ptr->get_codegen_info_ptr()->set_stack_offset(current_stack_offset);
         current_stack_offset += arr_size;
         write_code(code, 1);
