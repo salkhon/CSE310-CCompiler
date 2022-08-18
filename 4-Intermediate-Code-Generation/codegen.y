@@ -55,6 +55,7 @@
     vector<string> split(string, char = ' ');
     string get_label(Label, int=-1);
     string _get_var_ref(SymbolInfo*);
+    vector<string> _get_activation_record_teardown_code();
     void _alloc_int_var(string);
     void _alloc_int_array(string, int);
     bool is_sym_func(SymbolInfo*);
@@ -160,31 +161,35 @@ func_declaration:
 func_definition:
     func_signature LCURL {
         // symbol table insertions of parameters in new scope, var names are not available in calling sequence
-        current_stack_offset = 1; // at offset 0, CALL proc stores the return address after procedure finishes
+        current_stack_offset = 0; // 0 is for old BP
         symbol_table.enter_scope();
         for (SymbolInfo* param_symbol : params_for_func_scope) {
             // base pointer is reset on on every call, so identifying local vars based on offset works
             param_symbol->get_codegen_info_ptr()->set_stack_offset(current_stack_offset++);
             insert_into_symtable(param_symbol);
         }
-        params_for_func_scope.clear();
-
+        current_stack_offset++; // one extra position stores the return IP
+   
         string func_name = current_func_sym_ptr->get_symbol();
         func_name = func_name == "main" ? SOURCE_MAIN_FUNC_NAME : func_name;
         string code = func_name + " PROC";
         write_code(code, label_depth++);
-        write_code("MOV BP, SP", label_depth);
+
+        vector<string> code_to_set_BP{
+            "MOV AX, SP", 
+            "ADD AX, " + to_string(DW_SZ * params_for_func_scope.size()), 
+            "MOV BP, AX"
+        };
+        write_code(code_to_set_BP, label_depth);
     } statements RCURL {
-        // void func might not have explitic return statement, so automatic return routine needs to be performed
-        vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
-        code.insert(code.begin(), "; ACTIVATION RECORD TEAR DOWN FOR FUNCTION " + current_func_sym_ptr->get_symbol());
-        code.push_back("RET");
+       vector<string> code = _get_activation_record_teardown_code();
 
         write_code(code, label_depth--);
         write_code("ENDP");
 
         delete current_func_sym_ptr;
         current_func_sym_ptr = nullptr;
+        params_for_func_scope.clear();
         symbol_table.exit_scope();
     }
     ;
@@ -231,7 +236,6 @@ compound_statement:
         // no conflict with func_def because closure includes compound statement only after encountering statement non terminal.
         symbol_table.enter_scope();
     } statements RCURL {
-        vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
         symbol_table.exit_scope();
     }
     | LCURL RCURL {
@@ -419,12 +423,8 @@ statement:
         write_code(code, label_depth);
     }
     | RETURN expression SEMICOLON {
-        // return expression already in AX, pop parameters and locals off stack.
+        vector<string> code = _get_activation_record_teardown_code();
         // everything on the current scope is a parameter or a local, just pop x sizeof currentscope
-        vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
-        code.insert(code.begin(), "; ACTIVATION RECORD TEAR DOWN FOR FUNCTION " 
-            + current_func_sym_ptr->get_symbol());
-        code.push_back("RET");
         write_code(code, label_depth);
     }
     ;
@@ -815,6 +815,25 @@ string _get_var_ref(SymbolInfo* var_sym_ptr) {
     }
     return var_ref;
 }
+
+/**
+    @brief Returns code for popping local variables, and params, but preserving return IP on stack top. 
+**/
+vector<string> _get_activation_record_teardown_code() {
+    // return expression already in AX, don't touch AX, pop parameters and locals off stack.
+    // symbol table count incudes params and local vars
+    size_t local_decl_count = current_stack_offset - params_for_func_scope.size() - 1;
+    vector<string> locals_pop_code(local_decl_count, "POP BX");
+    vector<string> params_pop_code(params_for_func_scope.size(), "POP BX");
+    vector<string> code{locals_pop_code};
+    code.push_back("POP DX"); // return IP
+    code.insert(code.end(), params_pop_code.begin(), params_pop_code.end());
+    code.push_back("PUSH DX"); // store back return IP
+    code.insert(code.begin(), "; ACTIVATION RECORD TEAR DOWN FOR FUNCTION " + current_func_sym_ptr->get_symbol());
+    code.push_back("RET"); // will find IP on top
+    return code;
+}
+
 
 /**
     Writes allocation asm code of int variable into code_file based on if the variable is a local or global. 
