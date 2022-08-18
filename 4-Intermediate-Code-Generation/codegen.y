@@ -1,8 +1,9 @@
 %{
     #include <iostream>
+    #include <fstream>
     #include <cstdlib>
+    #include <cstdio>
     #include <cstring>
-    #include <cmath>
     #include <string>
     #include <sstream>
     #include <vector>
@@ -19,6 +20,9 @@
     int yylex();
     extern int yyerror(char*);
 
+    const string TEMP_CODE_FILE_NAME = "_code.asm", CODE_FILE_NAME = "code.asm", 
+        OPTIM_CODE_FILE_NAME = "optimized_code.asm";
+    const string SOURCE_MAIN_FUNC_NAME = "__main__";
     FILE* input_file,* code_file,* optim_code_file;
 
     const int SYM_TABLE_BUCKETS = 10;
@@ -30,9 +34,11 @@
     const string INT_ARRAY_TYPE = "int_arr";
     const string VOID_TYPE = "void";
 
+    const size_t DW_SZ = 2;
+
     vector<SymbolInfo*> globals;
 
-    SymbolInfo* current_func_sym_ptr;
+    SymbolInfo* current_func_sym_ptr = nullptr;
     vector<SymbolInfo*> params_for_func_scope;
     int current_stack_offset;
 
@@ -43,7 +49,7 @@
 
     enum Label {
         FOR_LOOP_CONDITION, FOR_LOOP_INCREMENT, FOR_LOOP_BODY, FOR_LOOP_END, WHILE_LOOP_CONDITION, 
-        WHILE_LOOP_BODY, WHILE_LOOP_END, IF_BODY, ELSE_BODY, IF_ELSE_END
+        WHILE_LOOP_BODY, WHILE_LOOP_END, ELSE_BODY, IF_ELSE_END, CMP_TRUE, CMP_FALSE
     };
 
     vector<string> split(string, char = ' ');
@@ -76,7 +82,7 @@
     ID CONST_INT LOGICOP RELOP ADDOP MULOP
 
 %type
-    start code_segment program unit var_declaration func_declaration func_definition statements parameter_list
+    start program unit var_declaration func_declaration func_definition statements parameter_list
     declaration_list statement expression_statement expression compound_statement if_condition logic_expression
     rel_expression simple_expression term unary_expression factor arguments func_signature argument_list
 
@@ -103,21 +109,12 @@
 %%
 
 start: 
-    code_segment program {
+    program {
         append_print_proc_def_to_codefile();
         prepend_data_segment_to_codefile();
         YYACCEPT;
     }
     ;
-
-code_segment:
-    %empty {
-        vector<string> code{
-            ".MODEL SMALL\n", 
-            ".CODE\n"
-        };
-        write_code(code);
-    }
 
 program: 
     program unit {}   
@@ -163,7 +160,7 @@ func_declaration:
 func_definition:
     func_signature LCURL {
         // symbol table insertions of parameters in new scope, var names are not available in calling sequence
-        current_stack_offset = 0;
+        current_stack_offset = 1; // at offset 0, CALL proc stores the return address after procedure finishes
         symbol_table.enter_scope();
         for (SymbolInfo* param_symbol : params_for_func_scope) {
             // base pointer is reset on on every call, so identifying local vars based on offset works
@@ -173,15 +170,22 @@ func_definition:
         params_for_func_scope.clear();
 
         string func_name = current_func_sym_ptr->get_symbol();
-        func_name = func_name == "main" ? "MAIN" : func_name;
+        func_name = func_name == "main" ? SOURCE_MAIN_FUNC_NAME : func_name;
         string code = func_name + " PROC";
         write_code(code, label_depth++);
+        write_code("MOV BP, SP", label_depth);
     } statements RCURL {
+        // void func might not have explitic return statement, so automatic return routine needs to be performed
+        vector<string> code(symbol_table.get_current_scope_size(), "POP BX");
+        code.insert(code.begin(), "; ACTIVATION RECORD TEAR DOWN FOR FUNCTION " + current_func_sym_ptr->get_symbol());
+        code.push_back("RET");
+
+        write_code(code, label_depth--);
+        write_code("ENDP");
+
         delete current_func_sym_ptr;
         current_func_sym_ptr = nullptr;
-
-        string code = "ENDP";
-        write_code(code, --label_depth);
+        symbol_table.exit_scope();
     }
     ;
 
@@ -408,7 +412,7 @@ statement:
         SymbolInfo* var_sym = symbol_table.lookup($3->get_symbol());
         string var_ref = _get_var_ref(var_sym);
         vector<string> code{
-            "; PRINT STATEMENT", 
+            "; PRINT STATEMENT VAR " + var_sym->get_symbol(), 
             "MOV AX, " + var_ref, 
             "CALL PRINT_INT_IN_AX"
         };
@@ -432,8 +436,7 @@ if_condition:
         vector<string> code{
             "; IF STATEMENT START",
             "CMP AX, 0", 
-            "JNE " + get_label(IF_BODY),
-            "JMP " + get_label(ELSE_BODY, label_count-1),
+            "JE " + get_label(ELSE_BODY)
         };
         write_code(code, label_depth++);
 
@@ -463,8 +466,12 @@ variable:
         $$ = $1;
     }
     | ID LTHIRD expression RTHIRD {
-        // expression value on AX, since its an index, move it to SI
-        string code = "MOV SI, AX";
+        // expression value on AX, since its an index, move it to SI, in word size
+        vector<string> code{
+            "MOV BX, " + DW_SZ,
+            "MUL BX",
+            "MOV SI, AX" 
+        };
         write_code(code, 1);
         $$ = new SymbolInfo(*$1); 
     }
@@ -505,7 +512,10 @@ logic_expression:
 rel_expression:
     simple_expression {}
     | simple_expression {
-        string code = "PUSH AX";
+        vector<string> code{
+            "; COMPARISON START",
+            "PUSH AX"
+        };
         write_code(code, label_depth);
     } RELOP simple_expression {
         string relop = $3->get_symbol();
@@ -513,22 +523,33 @@ rel_expression:
             "MOV BX, AX", 
             "POP AX",
             "CMP AX, BX", 
-            "MOV AX, 0"
+            "MOV AX, 0" // default false
         };
 
+        const size_t CURR_LABEL_ID = label_count;
+
         if (relop == "<") {
-            code.push_back("SETL AL");
+            code.push_back("JL " + get_label(CMP_TRUE));
         } else if (relop == "<=") {
-            code.push_back("SETLE AL");
+            code.push_back("JLE " + get_label(CMP_TRUE));
         } else if (relop == ">") {
-            code.push_back("SETG AL");
+            code.push_back("JG " + get_label(CMP_TRUE));
         } else if (relop == ">=") {
-            code.push_back("SETGE AL");
+            code.push_back("JGE " + get_label(CMP_TRUE));
         } else if (relop == "==") {
-            code.push_back("SETE AL");
+            code.push_back("JE " + get_label(CMP_TRUE));
         } else if (relop == "!=") {
-            code.push_back("SETNE AL");
-        }
+            code.push_back("JNE " + get_label(CMP_TRUE));
+        } // label_count incremented
+
+        code.push_back("JMP " + get_label(CMP_FALSE, CURR_LABEL_ID)); // default false
+
+        code.push_back(get_label(CMP_TRUE, CURR_LABEL_ID) + ":");
+        code.push_back("MOV AX, 1");
+
+        code.push_back(get_label(CMP_FALSE, CURR_LABEL_ID) + ":"); // default false
+        code.push_back("; COMPARISON END");
+
         write_code(code, label_depth);
     }
     ;
@@ -615,7 +636,6 @@ factor:
         vector<string> code{
             "; ACTIVATION RECORD SETUP FOR FUNCTION " + func_name,
             "PUSH BP", 
-            "MOV BP, SP"
         };
         write_code(code, label_depth);
     } argument_list RPAREN {
@@ -678,13 +698,13 @@ int main(int argc, char* argv[]) {
 
     FILE* error_file = fopen("error.txt", "r");
     if (!is_file_empty(error_file)) {
-        cout << "Copmilation failed. Check error.txt for errors in your code\n";
+        cout << "Compilation failed. Check error.txt for errors in your code\n";
         return 0; 
     }
 
     input_file = fopen(argv[1], "r");
-    code_file = fopen("code.asm", "w");
-    optim_code_file = fopen("optimized_code.asm", "w");
+    code_file = fopen(TEMP_CODE_FILE_NAME.c_str(), "w");
+    optim_code_file = fopen(OPTIM_CODE_FILE_NAME.c_str(), "w");
     if (!input_file || !code_file || !optim_code_file) {
         cout << "ERROR: Could not open file\n";
         return 1;
@@ -753,14 +773,17 @@ string get_label(Label label, int label_id) {
         case WHILE_LOOP_END:
             label_str = "WHILE_LOOP_END_";
             break;
-        case IF_BODY:
-            label_str = "IF_BODY_";
-            break;
         case ELSE_BODY:
             label_str = "ELSE_BODY_";
             break;
         case IF_ELSE_END:
             label_str = "IF_ELSE_END_";
+            break;
+        case CMP_TRUE:
+            label_str = "CMP_TRUE_";
+            break;
+        case CMP_FALSE:
+            label_str = "CMP_FALSE_";
             break;
     }
 
@@ -779,9 +802,9 @@ string _get_var_ref(SymbolInfo* var_sym_ptr) {
     CodeGenInfo* var_cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
     string var_ref;
     if (var_cgi_ptr->is_local()) {
-        var_ref = "BP+" + to_string(var_cgi_ptr->get_stack_offset());
+        var_ref = "BP-" + to_string(DW_SZ * var_cgi_ptr->get_stack_offset());
         if (var_type == INT_ARRAY_TYPE) {
-            var_ref += "+SI"; // array index in SI from expression
+            var_ref += "-SI"; // array index in SI from expression
         }
         var_ref = "[" + var_ref + "]";
     } else {
@@ -895,13 +918,66 @@ bool is_file_empty(FILE* file) {
 }
 
 void prepend_data_segment_to_codefile() {
-    write_code("\n.DATA");
+    // close previous code file
+    fflush(code_file);
+    fclose(code_file);
+
+    // open new code file, and set it as THE code file
+    code_file = fopen(CODE_FILE_NAME.c_str(), "w");
+    if (!code_file) {
+        cerr << "Error: Could not open code file to write data segment" << endl;
+        return;
+    }
+
+    // write data segment on new code file
+    write_code(".MODEL SMALL");
+    write_code(".STACK 100H");
+    write_code(".DATA");
     vector<string> code;
     for (SymbolInfo* global_sym_ptr : globals) {
         code.push_back(global_sym_ptr->get_codegen_info_ptr()->get_all_code()[0]);
     }
     write_code(code, 1);
     globals.clear();
+
+    // write __main__ function
+    code.clear();
+    code.insert(code.end(), {
+        ".CODE", 
+        "MAIN PROC" 
+    });
+    write_code(code);
+    code.clear();
+    code.insert(code.end(), {
+        "MOV AX, @DATA", 
+        "MOV DS, AX", 
+        "MOV BP, SP",
+        "CALL " + SOURCE_MAIN_FUNC_NAME, 
+        "MOV AH, 4CH", 
+        "INT 21H", // end prog
+    });
+    write_code(code, 1);
+    write_code("ENDP MAIN");
+
+    // append old code file to new code file
+    ifstream temp_code_file(TEMP_CODE_FILE_NAME);
+    string code_line;
+    if (temp_code_file.good()) {
+        while(getline(temp_code_file, code_line)) {
+            write_code(code_line);
+        }
+    } else {
+        cerr << "Error: Could not copy temp code file" << endl;
+        return;
+    }
+
+    write_code("END MAIN");
+
+    // delete old code file
+    temp_code_file.close();
+    if (remove(TEMP_CODE_FILE_NAME.c_str()) != 0) {
+        cerr << "Error: Could not delete temp code file" << endl;
+    }
 }
 
 void append_print_proc_def_to_codefile() {
@@ -914,8 +990,10 @@ void append_print_proc_def_to_codefile() {
         "MOV BX, 1",
         "NEG AX",
         "JMP OUTPUT_STACK_START",
+
         "POSITIVE_NUM:",
         "MOV BX, 0",
+        
         "OUTPUT_STACK_START:",
         "INC CX",
         "PUSH CX",
@@ -931,15 +1009,25 @@ void append_print_proc_def_to_codefile() {
         "MOV DX, -3",
         "PUSH DX",
         "INC CX",
+        
         "STACK_PRINT_LOOP:",
         "POP DX",
         "ADD DL, '0'",
         "MOV AH, 2",
         "INT 21H", 
         "LOOP STACK_PRINT_LOOP",
+        
+        "MOV DL, 10", 
+        "MOV AH, 2",
+        "INT 21H",
+        "MOV DL, 13", 
+        "MOV AH, 2",
+        "INT 21H",
+
         "RET"    
     };
     write_code(code, 1);
+    write_code("ENDP");
 }
 
 /**

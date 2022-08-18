@@ -1,1 +1,1 @@
-rm *.{out,c,o,h}
+rm *.{out,c,o,h,asm} log.txt error.txt 
