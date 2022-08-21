@@ -51,7 +51,7 @@
 
     enum Label {
         FOR_LOOP_CONDITION, FOR_LOOP_INCREMENT, FOR_LOOP_BODY, FOR_LOOP_END, WHILE_LOOP_CONDITION, 
-        WHILE_LOOP_BODY, WHILE_LOOP_END, ELSE_BODY, IF_ELSE_END, CMP_TRUE, CMP_FALSE
+        WHILE_LOOP_BODY, WHILE_LOOP_END, ELSE_BODY, IF_ELSE_END, CMP_TRUE, CMP_FALSE, SHORT_CIRC
     };
 
     vector<string> split(string, char = ' ');
@@ -97,8 +97,11 @@
 
 %type
     start program unit var_declaration func_declaration func_definition statements parameter_list
-    declaration_list statement expression_statement expression compound_statement if_condition logic_expression
-    rel_expression simple_expression term unary_expression factor arguments func_signature argument_list
+    declaration_list statement expression_statement expression compound_statement rel_expression 
+    simple_expression term unary_expression factor arguments func_signature argument_list
+
+%type<int_val>
+    logic_expression if_condition
 
 %type<syminfo_ptr>
     type_specifier variable
@@ -506,21 +509,35 @@ expression:
 
 logic_expression:
     rel_expression {}
-    | rel_expression {
+    | rel_expression LOGICOP {
         // make expression value persist
         // AFTER EACH EXPRESSION part, STACK NEEDS TO BE AS IT WAS BEFORE. That way current_stack_offset needn't be changed
-        string code = "PUSH AX";
-        write_code(code, 1);
-    } LOGICOP rel_expression {
+        vector<string> code;
+
+        if ($2->get_symbol() == "&&") {
+            code.push_back("CMP AX, 0");
+        } else if ($2->get_symbol() == "||") {
+            code.push_back("CMP AX, 1");
+        }
+        code.insert(code.end(), {
+            "JE " + get_label(SHORT_CIRC), 
+            "PUSH AX" // if not short circuited
+        });
+
+        write_code(code, label_depth);
+
+        $<int_val>$ = label_count - 1;
+    } rel_expression {
         vector<string> code{
             "MOV BX, AX", 
             "POP AX"
         };
-        if ($3->get_symbol() == "&&") {
+        if ($2->get_symbol() == "&&") {
             code.push_back("AND AX, BX");
-        } else if ($3->get_symbol() == "||") {
+        } else if ($2->get_symbol() == "||") {
             code.push_back("OR AX, BX");
         }
+        code.push_back(get_label(SHORT_CIRC, $<int_val>3) + ":");
         write_code(code, label_depth);
     }
     ;
@@ -808,6 +825,8 @@ string get_label(Label label, int label_id) {
         case CMP_FALSE:
             label_str = "CMP_FALSE_";
             break;
+        case SHORT_CIRC:
+            label_str = "SHORT_CIRC_";
     }
 
     return label_str + to_string(label_id);

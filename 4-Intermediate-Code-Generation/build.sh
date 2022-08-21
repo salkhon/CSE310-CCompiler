@@ -1,6 +1,6 @@
 #!/bin/bash
 
-inputfile="./test/Sample Input/loop.c"
+inputfile="./test/Sample Input/bonustest2_i.c"
 
 # analysis
 bison -d parser.y
