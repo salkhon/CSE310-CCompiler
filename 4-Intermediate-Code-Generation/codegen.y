@@ -23,7 +23,9 @@
     const string TEMP_CODE_FILE_NAME = "_code.asm", CODE_FILE_NAME = "code.asm", 
         OPTIM_CODE_FILE_NAME = "optimized_code.asm";
     const string SOURCE_MAIN_FUNC_NAME = "__main__";
-    FILE* input_file,* code_file,* optim_code_file;
+    
+    FILE* input_file;
+    ofstream code_file;
 
     const int SYM_TABLE_BUCKETS = 10;
 
@@ -67,6 +69,17 @@
     bool is_file_empty(FILE*);
     void append_print_proc_def_to_codefile();
     void prepend_data_segment_to_codefile();
+    void copy_txt_file(ifstream& from_file, ofstream& to_file);
+
+    void peephole_optimization();
+    void do_peephole(vector<string>&);
+    void write_optimized_code_to_file(vector<string>&);
+    bool starts_with(const string&, const string&);
+    vector<string> split_str(const string, const string);
+    void replace_substr(string&, const string, const string);
+    void trim(string&);
+    void copy_txt_file(ifstream&, ofstream&);
+    vector<string> load_code_into_mem();
 %}
 
 %union {
@@ -112,8 +125,8 @@
 start: 
     program {
         append_print_proc_def_to_codefile();
-        prepend_data_segment_to_codefile();
         YYACCEPT;
+        // temp code file does not have data segment yet, final code with data segment, will be generated after parsing
     }
     ;
 
@@ -182,10 +195,13 @@ func_definition:
         };
         write_code(code_to_set_BP, label_depth);
     } statements RCURL {
-       vector<string> code = _get_activation_record_teardown_code();
+        if (current_func_sym_ptr->get_semantic_type() == VOID_TYPE) {
+            // void functions can end without explicit return statement
+            vector<string> code = _get_activation_record_teardown_code();
+            write_code(code, label_depth);
+        }
 
-        write_code(code, label_depth--);
-        write_code("ENDP");
+        write_code("ENDP", --label_depth);
 
         delete current_func_sym_ptr;
         current_func_sym_ptr = nullptr;
@@ -468,7 +484,7 @@ variable:
     | ID LTHIRD expression RTHIRD {
         // expression value on AX, since its an index, move it to SI, in word size
         vector<string> code{
-            "MOV BX, " + DW_SZ,
+            "MOV BX, " + to_string(DW_SZ),
             "MUL BX",
             "MOV SI, AX" 
         };
@@ -657,7 +673,9 @@ factor:
         string var_ref = _get_var_ref(var_sym_ptr);
         vector<string> code = {
             "MOV AX, " + var_ref, 
-            "INC " + var_ref
+            "MOV BX, AX", 
+            "INC BX", 
+            "MOV " + var_ref + ", BX"
         };
         write_code(code, label_depth);
     }
@@ -666,7 +684,9 @@ factor:
         string var_ref = _get_var_ref(var_sym_ptr);
         vector<string> code = {
             "MOV AX, " + var_ref, 
-            "DEC " + var_ref
+            "MOV BX, AX",
+            "DEC BX",
+            "MOV " + var_ref + ", BX"
         };
         write_code(code, label_depth);
     }
@@ -701,12 +721,13 @@ int main(int argc, char* argv[]) {
         cout << "Compilation failed. Check error.txt for errors in your code\n";
         return 0; 
     }
+    fclose(error_file);
 
     input_file = fopen(argv[1], "r");
-    code_file = fopen(TEMP_CODE_FILE_NAME.c_str(), "w");
-    optim_code_file = fopen(OPTIM_CODE_FILE_NAME.c_str(), "w");
-    if (!input_file || !code_file || !optim_code_file) {
-        cout << "ERROR: Could not open file\n";
+    code_file.open(TEMP_CODE_FILE_NAME);
+
+    if (!input_file || !code_file) {
+        cout << "ERROR: Could not open input or code file\n";
         return 1;
     }
 
@@ -715,8 +736,10 @@ int main(int argc, char* argv[]) {
     yyparse();
 
     fclose(input_file);
-    fclose(code_file);
-    fclose(optim_code_file);
+    code_file.close();
+
+    prepend_data_segment_to_codefile();
+    peephole_optimization();
 
     return 0;
 }
@@ -919,8 +942,7 @@ void write_code(const string& code, int indentation) {
     for (int i = 0; i < indentation; i++) {
         indent += "\t";
     }
-    fprintf(code_file, "%s%s\n", indent.c_str(), code.c_str());
-    fflush(code_file); // normally does not flush if buffer is not full enough
+    code_file << indent << code << endl;
 }
 
 void write_code(const vector<string>& code, int indentation) {
@@ -937,12 +959,9 @@ bool is_file_empty(FILE* file) {
 }
 
 void prepend_data_segment_to_codefile() {
-    // close previous code file
-    fflush(code_file);
-    fclose(code_file);
+    // open actual code file for writing
+    code_file.open(CODE_FILE_NAME);
 
-    // open new code file, and set it as THE code file
-    code_file = fopen(CODE_FILE_NAME.c_str(), "w");
     if (!code_file) {
         cerr << "Error: Could not open code file to write data segment" << endl;
         return;
@@ -950,7 +969,7 @@ void prepend_data_segment_to_codefile() {
 
     // write data segment on new code file
     write_code(".MODEL SMALL");
-    write_code(".STACK 100H");
+    write_code(".STACK 300H");
     write_code(".DATA");
     vector<string> code;
     for (SymbolInfo* global_sym_ptr : globals) {
@@ -980,11 +999,8 @@ void prepend_data_segment_to_codefile() {
 
     // append old code file to new code file
     ifstream temp_code_file(TEMP_CODE_FILE_NAME);
-    string code_line;
     if (temp_code_file.good()) {
-        while(getline(temp_code_file, code_line)) {
-            write_code(code_line);
-        }
+        copy_txt_file(temp_code_file, code_file);
     } else {
         cerr << "Error: Could not copy temp code file" << endl;
         return;
@@ -1047,6 +1063,149 @@ void append_print_proc_def_to_codefile() {
     };
     write_code(code, 1);
     write_code("ENDP");
+}
+
+/**
+    Peephole Optimization
+**/
+
+void peephole_optimization() {
+    vector<string> all_code = load_code_into_mem();
+
+    // do optim
+    do_peephole(all_code);
+
+    write_optimized_code_to_file(all_code);
+}
+
+void do_peephole(vector<string>& all_code) {
+    bool skip_mode = false;
+    string curr_line, prev_line = all_code[0];
+
+    for (int i = 1, prev_idx = 0; i < all_code.size(); i++) {
+        if (all_code[i].find(";") != string::npos) {
+            continue;
+        }
+
+        curr_line = all_code[i];
+        prev_line = all_code[prev_idx];
+        trim(curr_line); // preserving original indentation on all_code
+        trim(prev_line);
+
+        /* cout << i << " - " << prev_line << " - " << curr_line << endl; */
+
+        if (starts_with("JMP", curr_line) || starts_with("RET", curr_line)) {
+            // skip until next label, or end of function
+            i++;
+            while (
+                (all_code[i].find(':') == string::npos) &&
+                (all_code[i].find("ENDP") == string::npos)
+            ) {
+                all_code[i] = "; PEEPHOLE " + all_code[i];
+                i++;
+            }
+        } else if (starts_with("MOV", curr_line) && starts_with("MOV", prev_line)) {
+            curr_line.erase(0, 4); // removing "MOV "
+            vector<string> curr_line_regs = split_str(curr_line, ", ");
+
+            prev_line.erase(0, 4); 
+            vector<string> prev_line_regs = split_str(prev_line, ", ");
+            
+            if (curr_line_regs[0] == prev_line_regs[1] && curr_line_regs[1] == prev_line_regs[0]) {
+                all_code[i] = "; PEEPHOLE " + all_code[i];
+            }
+        } else if (starts_with("ADD", curr_line)) {
+            curr_line.erase(0, 4); // removing "ADD "
+            vector<string> operands = split_str(curr_line, ", ");
+            if (operands[1] == "0") {
+                all_code[i] = "; PEEPHOLE " + all_code[i];
+            }
+        } else if (starts_with("PUSH", curr_line) && starts_with("POP", prev_line)) {
+            prev_line.erase(0, 4); // removing "POP "
+            curr_line.erase(0, 5); // removing "PUSH "
+            
+            if (curr_line == prev_line) {
+                all_code[prev_idx] = "; PEEPHOLE" + all_code[prev_idx];
+                all_code[i] = "; PEEPHOLE" + all_code[i];
+            }
+        } else if (starts_with("POP", curr_line) && starts_with("PUSH", prev_line)) {
+            prev_line.erase(0, 5); // removing "PUSH "
+            curr_line.erase(0, 4); // removing "POP "
+            
+            if (curr_line == prev_line) {
+                all_code[prev_idx] = "; PEEPHOLE" + all_code[prev_idx];
+                all_code[i] = "; PEEPHOLE" + all_code[i];
+            }
+        }
+
+        prev_idx = i;
+    }
+}
+
+void write_optimized_code_to_file(vector<string>& all_code) {
+    ofstream optim_code_file(OPTIM_CODE_FILE_NAME);
+    if (!optim_code_file) {
+        cerr << "Could not open optimized code file\n";
+        return;
+    }
+
+    for (string& line : all_code) {
+        optim_code_file << line << endl;
+    }
+    optim_code_file.close();
+}
+
+bool starts_with(const string& start, const string& subject) {
+    return subject.find(start) == 0;
+}
+
+vector<string> split_str(const string str, const string delim) {
+    vector<string> split;
+    int str_start = 0;
+    for (int delim_pos = str.find(delim); delim_pos != string::npos; delim_pos = str.find(delim, str_start)) {
+        split.push_back(str.substr(str_start, delim_pos - str_start));
+        str_start = delim_pos + delim.length();
+    }
+    if (str_start < str.size()) {
+        split.push_back(str.substr(str_start));
+    }
+    return split;
+}
+
+void replace_substr(string& subject, const string target, const string replacement) {
+    size_t pos = 0;
+    while ((pos = subject.find(target, pos)) != string::npos) {
+        subject.replace(pos, target.length(), replacement);
+        pos += replacement.length();
+    }
+}
+
+void trim(string& str) {
+    string ws = " \t";
+    str.erase(0, str.find_first_not_of(ws));
+    str.erase(str.find_last_not_of(ws) + 1);
+}
+
+void copy_txt_file(ifstream& from_file, ofstream& to_file) {
+    string line;
+    while (getline(from_file, line)) {
+        to_file << line << endl;
+    }
+}
+
+vector<string> load_code_into_mem() {
+    vector<string> all_code;
+    ifstream code_file(CODE_FILE_NAME);
+    string line;
+    if (code_file.good()) {
+        while (getline(code_file, line)) {
+            all_code.push_back(line);
+        }
+    } else {
+        cerr << "Could not open code file to load into memory for optimization\n";
+    }
+    code_file.close();
+    return all_code;
 }
 
 /**

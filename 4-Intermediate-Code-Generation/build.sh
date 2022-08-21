@@ -1,3 +1,7 @@
+#!/bin/bash
+
+inputfile="./test/Sample Input/loop.c"
+
 # analysis
 bison -d parser.y
 g++ -w -c parser.tab.c
@@ -12,7 +16,7 @@ g++ parser.tab.o lex.yy.o \
     ./symbol-table/SymbolTable/SymbolTable.cpp \
     ./symbol-table/SymbolInfo/CodeGenInfo/CodeGenInfo.cpp \
     -o analysis.out
-./analysis.out input.txt
+./analysis.out "$inputfile"
 
 # synthesis
 bison -d codegen.y
@@ -28,4 +32,4 @@ g++ codegen.tab.o codegenlex.yy.o \
     ./symbol-table/SymbolTable/SymbolTable.cpp \
     ./symbol-table/SymbolInfo/CodeGenInfo/CodeGenInfo.cpp \
     -o synthesis.out
-./synthesis.out input.txt
+./synthesis.out "$inputfile"
