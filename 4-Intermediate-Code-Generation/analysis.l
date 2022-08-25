@@ -10,7 +10,7 @@
     #include <stdlib.h>
     #include <cstring>
     #include "./symbol-table/include.hpp"
-    #include "parser.tab.h"
+    #include "analysis.tab.h"
 
     using namespace std;
 

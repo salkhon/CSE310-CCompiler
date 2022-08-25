@@ -10,7 +10,7 @@
     #include <stdlib.h>
     #include <cstring>
     #include "./symbol-table/include.hpp"
-    #include "codegen.tab.h"
+    #include "synthesis.tab.h"
 
     using namespace std;
 

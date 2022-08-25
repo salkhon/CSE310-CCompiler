@@ -1,35 +1,23 @@
 #!/bin/bash
 
-inputfile="./test/Sample Input/bonustest2_i.c"
+inputfile="./test/Sample Input/temp.c"
 
 # analysis
-bison -d parser.y
-g++ -w -c parser.tab.c
-
-flex lexer.l
-g++ -w -c lex.yy.c
-
-g++ parser.tab.o lex.yy.o \
-    ./symbol-table/ScopeTable/ScopeTable.cpp \
-    ./symbol-table/ScopeTable/SymbolInfoHashTable/SymbolInfoHashTable.cpp \
-    ./symbol-table/SymbolInfo/SymbolInfo.cpp \
-    ./symbol-table/SymbolTable/SymbolTable.cpp \
-    ./symbol-table/SymbolInfo/CodeGenInfo/CodeGenInfo.cpp \
-    -o analysis.out
-./analysis.out "$inputfile"
+bison -d analysis.y
+flex -o analysis.yy.c analysis.l
 
 # synthesis
-bison -d codegen.y
-g++ -w -c codegen.tab.c
+bison -d synthesis.y
+flex -o synthesis.yy.c synthesis.l 
 
-flex -o codegenlex.yy.c codegen.l 
-g++ -w -c codegenlex.yy.c
-
-g++ codegen.tab.o codegenlex.yy.o \
+g++ main.cpp analysis.tab.c analysis.yy.c synthesis.tab.c synthesis.yy.c \
     ./symbol-table/ScopeTable/ScopeTable.cpp \
     ./symbol-table/ScopeTable/SymbolInfoHashTable/SymbolInfoHashTable.cpp \
     ./symbol-table/SymbolInfo/SymbolInfo.cpp \
     ./symbol-table/SymbolTable/SymbolTable.cpp \
     ./symbol-table/SymbolInfo/CodeGenInfo/CodeGenInfo.cpp \
-    -o synthesis.out
-./synthesis.out "$inputfile"
+    -o subccompiler.out
+./subccompiler.out "$inputfile"
+
+# if i remove the main funcs of the parsers, non of them will have entry points, then i can 
+# create a script to call yyparse() of those different parsers. my scripts will combine them. 

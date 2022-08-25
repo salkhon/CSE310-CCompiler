@@ -8,7 +8,6 @@
     #include <sstream>
     #include <vector>
     #include <algorithm>
-    #include <stack>
     #include "./symbol-table/include.hpp"
 
     using namespace std;
@@ -36,7 +35,7 @@
     const string INT_ARRAY_TYPE = "int_arr";
     const string VOID_TYPE = "void";
 
-    const size_t DW_SZ = 2;
+    const int DW_SZ = 2;
 
     vector<SymbolInfo*> globals;
 
@@ -98,10 +97,10 @@
 %type
     start program unit var_declaration func_declaration func_definition statements parameter_list
     declaration_list statement expression_statement expression compound_statement rel_expression 
-    simple_expression term unary_expression factor arguments func_signature argument_list
+    simple_expression term unary_expression factor func_signature
 
 %type<int_val>
-    logic_expression if_condition
+    logic_expression if_condition argument_list arguments
 
 %type<syminfo_ptr>
     type_specifier variable
@@ -177,26 +176,25 @@ func_declaration:
 func_definition:
     func_signature LCURL {
         // symbol table insertions of parameters in new scope, var names are not available in calling sequence
-        current_stack_offset = 0; // 0 is for old BP
+        // new BP is set at the top of func def. args were pushed before that BP. So, param offsets need to be positive, 
+        // if local offsets are negative. args are pushed from first to last, so offset will go from positive toward zero. 
+        current_stack_offset = params_for_func_scope.size(); // offset 0 is for return IP, paramsize+1 is for old BP. 
         symbol_table.enter_scope();
         for (SymbolInfo* param_symbol : params_for_func_scope) {
             // base pointer is reset on on every call, so identifying local vars based on offset works
-            param_symbol->get_codegen_info_ptr()->set_stack_offset(current_stack_offset++);
+            param_symbol->get_codegen_info_ptr()->set_is_local(true);
+            param_symbol->get_codegen_info_ptr()->set_stack_offset(current_stack_offset--);
             insert_into_symtable(param_symbol);
         }
-        current_stack_offset++; // one extra position stores the return IP
+        current_stack_offset--; // one extra position stores the return IP (at BP, offset=0)
    
         string func_name = current_func_sym_ptr->get_symbol();
         func_name = func_name == "main" ? SOURCE_MAIN_FUNC_NAME : func_name;
         string code = func_name + " PROC";
         write_code(code, label_depth++);
 
-        vector<string> code_to_set_BP{
-            "MOV AX, SP", 
-            "ADD AX, " + to_string(DW_SZ * params_for_func_scope.size()), 
-            "MOV BP, AX"
-        };
-        write_code(code_to_set_BP, label_depth);
+        code = "MOV BP, SP"; // set new BP, with params above, locals below - return IP pointed at
+        write_code(code, label_depth);
     } statements RCURL {
         if (current_func_sym_ptr->get_semantic_type() == VOID_TYPE) {
             // void functions can end without explicit return statement
@@ -663,8 +661,7 @@ factor:
         write_code(code, label_depth);
     }
     | ID LPAREN {
-        // the code for the procedure we are calling is independent, written with its own current_stack_offset, 
-        // which we don't need
+        // the definition code for the procedure we are calling is independent, written with its own current_stack_offset, 
         string func_name = $1->get_symbol();
         vector<string> code{
             "; ACTIVATION RECORD SETUP FOR FUNCTION " + func_name,
@@ -673,11 +670,13 @@ factor:
         write_code(code, label_depth);
     } argument_list RPAREN {
         string func_name = $1->get_symbol();
-        vector<string> code{
-            "CALL " + func_name, 
-            "POP BP", 
+        size_t arg_count = $4;
+        vector<string> code(arg_count, "POP BX"); // pop args
+        code.insert(code.begin(), "CALL " + func_name);
+        code.insert(code.end(), {
+            "POP BP", // restore old BP
             "; EXECUTION COMPLETE FOR FUNCTION " + func_name
-        };
+        });
         write_code(code, label_depth);
     }
     | LPAREN expression RPAREN {}
@@ -710,18 +709,24 @@ factor:
     ;
 
 argument_list:
-    arguments {}
-    | %empty {}
+    arguments {
+        $$ = $1; // arg count
+    }
+    | %empty {
+        $$ = 0;
+    }
     ;
 
 arguments:
     arguments COMMA logic_expression {
         string code = "PUSH AX";
         write_code(code, label_depth);
+        $$ = $1 + 1; // return total arg count
     }
     | logic_expression {
         string code = "PUSH AX";
         write_code(code, label_depth);
+        $$ = 1;
     }
     ;
 
@@ -844,7 +849,7 @@ string _get_var_ref(SymbolInfo* var_sym_ptr) {
     CodeGenInfo* var_cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
     string var_ref;
     if (var_cgi_ptr->is_local()) {
-        var_ref = "BP-" + to_string(DW_SZ * var_cgi_ptr->get_stack_offset());
+        var_ref = "BP+" + to_string(DW_SZ * var_cgi_ptr->get_stack_offset());
         if (var_type == INT_ARRAY_TYPE) {
             var_ref += "-SI"; // array index in SI from expression
         }
@@ -859,23 +864,16 @@ string _get_var_ref(SymbolInfo* var_sym_ptr) {
 }
 
 /**
-    @brief Returns code for popping local variables, and params, but preserving return IP on stack top. 
+    @brief Returns code for popping local variables, with return using IP on stack top. 
 **/
 vector<string> _get_activation_record_teardown_code() {
-    // return expression already in AX, don't touch AX, pop parameters and locals off stack.
-    // symbol table count incudes params and local vars
-    size_t local_decl_count = current_stack_offset - params_for_func_scope.size() - 1;
-    vector<string> locals_pop_code(local_decl_count, "POP BX");
-    vector<string> params_pop_code(params_for_func_scope.size(), "POP BX");
-    vector<string> code{locals_pop_code};
-    code.push_back("POP DX"); // return IP
-    code.insert(code.end(), params_pop_code.begin(), params_pop_code.end());
-    code.push_back("PUSH DX"); // store back return IP
-    code.insert(code.begin(), "; ACTIVATION RECORD TEAR DOWN FOR FUNCTION " + current_func_sym_ptr->get_symbol());
+    // return expression already in AX, don't touch AX, pop locals off stack.
+    // symbol table count incudes params and local vars. params will be popped off by caller action code
+    size_t local_decl_count = (-current_stack_offset) - 1;
+    vector<string> code(local_decl_count, "POP BX");
     code.push_back("RET"); // will find IP on top
     return code;
 }
-
 
 /**
     Writes allocation asm code of int variable into code_file based on if the variable is a local or global. 
@@ -898,9 +896,9 @@ void _alloc_int_var(string var_name) {
             "; INITIALIZING BASIC VARIABLE " + var_name + " at stack offset " + to_string(current_stack_offset), 
             "PUSH 0"
         };
-        CodeGenInfo* cgi_ptr = var_sym_ptr->get_codegen_info_ptr();
-        cgi_ptr->set_stack_offset(current_stack_offset++);
-        write_code(code, 1);
+        var_sym_ptr->get_codegen_info_ptr()->set_is_local(true);
+        var_sym_ptr->get_codegen_info_ptr()->set_stack_offset(current_stack_offset--); // stack grows downward
+        write_code(code, label_depth);
     }
     insert_into_symtable(var_sym_ptr);
     delete var_sym_ptr;
@@ -927,9 +925,10 @@ void _alloc_int_array(string arr_name, int arr_size) {
         vector<string> code(arr_size, "PUSH 0");
         code.insert(code.begin(), "; INTIALIZING ARRAY VARIABLE " + arr_name + "[" + arr_sz_str + "]" + 
             " at stack offset " + to_string(current_stack_offset));
+        arr_sym_ptr->get_codegen_info_ptr()->set_is_local(true);
         arr_sym_ptr->get_codegen_info_ptr()->set_stack_offset(current_stack_offset);
-        current_stack_offset += arr_size;
-        write_code(code, 1);
+        current_stack_offset -= arr_size; // stack grows downward
+        write_code(code, label_depth);
     }
 
     insert_into_symtable(arr_sym_ptr);
