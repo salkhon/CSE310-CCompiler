@@ -991,7 +991,8 @@ int main(int argc, char* argv[]) {
     error_file = fopen("error.txt", "w");
 
     if (!input_file || !log_file || !error_file) {
-        cout << "ERROR: Could not open file\n";
+        cerr << "ERROR: Could not open file\n";
+        cout << input_file << " - " << log_file << " - " << error_file << endl;
         return 1;
     }
 

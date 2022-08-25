@@ -8,6 +8,7 @@
     #include <sstream>
     #include <vector>
     #include <algorithm>
+    #include <stack>
     #include "./symbol-table/include.hpp"
 
     using namespace std;
@@ -65,7 +66,6 @@
     bool insert_into_symtable(SymbolInfo*);
     void write_code(const string&, int=0);
     void write_code(const vector<string>&, int=0);
-    bool is_file_empty(FILE*);
     void append_print_proc_def_to_codefile();
     void prepend_data_segment_to_codefile();
     void copy_txt_file(ifstream& from_file, ofstream& to_file);
@@ -738,13 +738,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    FILE* error_file = fopen("error.txt", "r");
-    if (!is_file_empty(error_file)) {
-        cout << "Compilation failed. Check error.txt for errors in your code\n";
-        return 0; 
-    }
-    fclose(error_file);
-
     input_file = fopen(argv[1], "r");
     code_file.open(TEMP_CODE_FILE_NAME);
 
@@ -967,13 +960,6 @@ void write_code(const vector<string>& code, int indentation) {
     for (string code_line : code) {
         write_code(code_line, indentation);
     }
-}
-
-bool is_file_empty(FILE* file) {
-    char c;
-    for (c = fgetc(file); c != EOF && c != ' ' && c != '\t' && c != '\n'; c = fgetc(file)) {
-    }
-    return c == EOF;
 }
 
 void prepend_data_segment_to_codefile() {
